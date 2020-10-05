@@ -2,7 +2,7 @@ import smbus
 import time
 
 #--------------------------------------------------------
-#						MPU6050 Registers and adresses
+# MPU6050 Registers and adresses
 #--------------------------------------------------------
 PWR_MGMT_1 = 0x6B
 SMPLRT_DIV = 0x19
@@ -25,14 +25,14 @@ Device_Address = 0x68
 bus = smbus.SMBus(1)
 
 #--------------------------------------------------------
-#	Measured offsets
+# Measured offsets
 #--------------------------------------------------------
 AX_OFFSET = 0
 AY_OFFSET = 0
 AZ_OFFSET = 0
 
 #--------------------------------------------------------
-#	Calibration parameters
+# Calibration parameters
 #--------------------------------------------------------
 #amount used to calculate average
 buffer_size = 1000
@@ -85,9 +85,8 @@ def read_raw_data(addr, offset):
 	
 	return value + offset
 
-
 #--------------------------------------------------------
-#	Calculate samples average
+# Calculate average sample function
 #--------------------------------------------------------
 def AVG_DATA():
 
@@ -116,6 +115,9 @@ def AVG_DATA():
 
 	return avg_ax, avg_ay, avg_az
 
+#--------------------------------------------------------
+# Calibrate function
+#--------------------------------------------------------
 def CALIBRATE():
 
 	global AX_OFFSET
@@ -125,6 +127,7 @@ def CALIBRATE():
 	c_ax_offset = c_ay_offset = c_az_offset = 0
 	avg_ax, avg_ay, avg_az = AVG_DATA()
 
+	# Initial offset
 	c_ax_offset = -avg_ax/accel_error_range
 	c_ay_offset = -avg_ay/accel_error_range
 	c_az_offset = (2048.0 - avg_az)/accel_error_range
@@ -160,7 +163,6 @@ def CALIBRATE():
 #--------------------------------------------------------
 #	Execution
 #--------------------------------------------------------
-
 MPU_INIT()
 
 print("Calibrating...")
