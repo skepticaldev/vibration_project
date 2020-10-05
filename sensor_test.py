@@ -1,8 +1,9 @@
 import smbus
 import time
 
-#MPU6050 Registers and address
-
+#--------------------------------------------------------
+#						MPU6050 Registers and adresses
+#--------------------------------------------------------
 PWR_MGMT_1 = 0x6B
 SMPLRT_DIV = 0x19
 DLPF_CFG = 0x26
@@ -18,12 +19,29 @@ GYRO_XOUT_H = 0x43
 GYRO_YOUT_H = 0x45
 GYRO_ZOUT_H = 0x47
 
-#Calculated offsets
+#MPU6050 device address
+Device_Address = 0x68
+
+bus = smbus.SMBus(1)
+
+#--------------------------------------------------------
+#									Measured offsets
+#--------------------------------------------------------
 AX_OFFSET = 0
 AY_OFFSET = 0
 AZ_OFFSET = 0
 
+#--------------------------------------------------------
+#									Calibration parameters
+#--------------------------------------------------------
+#amount used to calculate average
+buffer_size = 1000
+#accelerometer error allowed
+accel_error_range = 10
 
+#--------------------------------------------------------
+# 								Config MPU function
+#--------------------------------------------------------
 def MPU_INIT():
 	#write to sample rate register
 	bus.write_byte_data(Device_Address, SMPLRT_DIV, 0)
@@ -49,7 +67,11 @@ def MPU_INIT():
 	#write to FIFO_EN
 	bus.write_byte_data(Device_Address, FIFO_EN, 8)
 
+#--------------------------------------------------------
+# Read MPU raw values LSB/g
+#--------------------------------------------------------
 def read_raw_data(addr, offset):
+
 	#Accelerometer and Gyro value are 16-bit
 	high = bus.read_byte_data(Device_Address, addr)
 	low = bus.read_byte_data(Device_Address, addr+1)
@@ -63,26 +85,16 @@ def read_raw_data(addr, offset):
 	
 	return value + offset
 
-bus = smbus.SMBus(1)
-Device_Address = 0x68 #MPU6050 device address
 
-MPU_INIT()
+#--------------------------------------------------------
+#								Calculate samples average
+#--------------------------------------------------------
+def AVG_DATA():
 
-#Calibrate section
-#
-#
-buffer_size = 1000 #reading amount used to calculate average
-accel_deadzone = 8 #accelerometer error allowed
-
-mean_ax = mean_ay = mean_az = state = 0
-c_ax_offset = c_ay_offset = c_az_offset = 0
-
-def mean_sensors():
-	global mean_ax
-	global mean_ay
-	global mean_az
+	avg_ax = avg_ay = avg_az = 0
 
 	i = buff_ax = buff_ay = buff_az = 0
+	
 	while i<(buffer_size+101):
 		ax = read_raw_data(ACCEL_XOUT_H, AX_OFFSET)
 		ay = read_raw_data(ACCEL_YOUT_H, AY_OFFSET)
@@ -94,27 +106,28 @@ def mean_sensors():
 			buff_az = buff_az + az
 
 		if(i==(buffer_size+100)):
-			mean_ax = buff_ax/buffer_size
-			mean_ay = buff_ay/buffer_size
-			mean_az = buff_az/buffer_size
+			avg_ax = buff_ax/buffer_size
+			avg_ay = buff_ay/buffer_size
+			avg_az = buff_az/buffer_size
 
 		i = i + 1
+		#gap between samples
 		time.sleep(0.002)
 
-	print(mean_ax, mean_az, mean_ay)
+	return avg_ax, avg_az, avg_ay
 
-def calibration():
-	global c_ax_offset
-	global c_ay_offset
-	global c_az_offset
+def CALIBRATE():
 
 	global AX_OFFSET
 	global AY_OFFSET
 	global AZ_OFFSET
 
-	c_ax_offset = -mean_ax/8
-	c_ay_offset = -mean_ay/8
-	c_az_offset = (2048.0 - mean_az)/8
+	c_ax_offset = c_ay_offset = c_az_offset = 0
+	avg_ax, avg_ay, avg_az = AVG_DATA()
+
+	c_ax_offset = -avg_ax/accel_error_range
+	c_ay_offset = -avg_ay/accel_error_range
+	c_az_offset = (2048.0 - avg_az)/accel_error_range
 
 	while True:
 		ready = 0
@@ -122,49 +135,37 @@ def calibration():
 		AY_OFFSET = c_ay_offset
 		AZ_OFFSET = c_az_offset
 		
-		mean_sensors()
-		print("...")
+		avg_ax, avg_ay, avg_az = AVG_DATA()
 
-		if(abs(mean_ax)<=accel_deadzone):
+		if(abs(avg_ax)<=accel_error_range):
 			ready+=1
-			print("x ready...")
 		else:
-			c_ax_offset = c_ax_offset - mean_ax/accel_deadzone
+			c_ax_offset = c_ax_offset - avg_ax/accel_error_range
 
-		if(abs(mean_ay)<=accel_deadzone):
+		if(abs(avg_ay)<=accel_error_range):
 			ready+=1
-			print("y ready...")
 		else:
-			c_ay_offset = c_ay_offset - mean_ay/accel_deadzone
+			c_ay_offset = c_ay_offset - avg_ay/accel_error_range
 
-		if(abs(2048-mean_az)<=accel_deadzone):
+		if(abs(2048-avg_az)<=accel_error_range):
 			ready+=1
-			print("z ready...")
 		else:
-			c_az_offset = c_az_offset + (2048-mean_az)/accel_deadzone
+			c_az_offset = c_az_offset + (2048-avg_az)/accel_error_range
 
 		if(ready==3):
 			break
-#
-#
-#
+
+#--------------------------------------------------------
+#												Execution
+#--------------------------------------------------------
+
+MPU_INIT()
+
 print("Calibrating...")
-mean_sensors()
-
-
-calibration()
-
-print("Calibration values...")
-print(mean_ax)
-print(mean_ay)
-print(mean_az)
-print(c_ax_offset)
-print(c_ay_offset)
-print(c_az_offset)
+CALIBRATE()
 
 print("Reading data...")
 
-start_time = time.time()
 while True:
 	
 	#Read Accelerometer raw value
@@ -172,16 +173,10 @@ while True:
 	acc_y = read_raw_data(ACCEL_YOUT_H, AY_OFFSET)
 	acc_z = read_raw_data(ACCEL_ZOUT_H, AZ_OFFSET)
 
-	#Full scale range +/- 250 degree/C as per sensitivity scale factor
+	#sensitivity scale factor
 	Ax = acc_x/2048.0
 	Ay = acc_y/2048.0
 	Az = acc_z/2048.0
 
 	print(Ax, Ay, Az)
-	#print(acc_x,acc_y,acc_z)
 
-print(len(sample_times))
-temp = start_time
-#for st in sample_times:
-#	print((st-temp)*1000)
-#	temp = st
