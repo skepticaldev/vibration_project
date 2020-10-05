@@ -114,7 +114,7 @@ def AVG_DATA():
 		#gap between samples
 		time.sleep(0.002)
 
-	return avg_ax, avg_az, avg_ay
+	return avg_ax, avg_ay, avg_az
 
 def CALIBRATE():
 
