@@ -195,8 +195,20 @@ CALIBRATE()
 print("Reading data...")
 samples = get_samples(1000)
 
+normalized_samples = []
+
+initial_time = samples[0][3]
+
 for sample in samples:
-	print(sample)
+	norm_x = (signed_data(sample[0]) + AX_OFFSET)/2048.0
+	norm_y = (signed_data(sample[1]) + AY_OFFSET)/2048.0
+	norm_z = (signed_data(sample[2]) + AZ_OFFSET)/2048.0
+	norm_time = sample[3]-initial_time
+
+	normalized_samples.append([norm_x, norm_y, norm_z, norm_time])
+
+for nSample in normalized_samples:
+	print(nSample)
 
 # while True:
 	
