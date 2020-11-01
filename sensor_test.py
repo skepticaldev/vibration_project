@@ -2,7 +2,7 @@ import smbus
 import time
 
 #--------------------------------------------------------
-# MPU6050 Registers and adresses
+# MPU6050 Registers and addresses
 #--------------------------------------------------------
 PWR_MGMT_1 = 0x6B
 SMPLRT_DIV = 0x19
@@ -70,7 +70,7 @@ def MPU_INIT():
 #--------------------------------------------------------
 # Read MPU raw values LSB/g
 #--------------------------------------------------------
-def read_raw_data(addr, offset):
+def read_raw_data(addr):
 
 	#Accelerometer and Gyro value are 16-bit
 	high = bus.read_byte_data(Device_Address, addr)
@@ -78,11 +78,15 @@ def read_raw_data(addr, offset):
 	
 	#concatenate higher and lower value
 	value = ((high << 8) | low)
+	
+	return value
+
+def normalize_data(value, offset):
 
 	#to get signed value from mpu6050
-	if(value > 32768):
+	if(value>32768):
 		value = value - 65536
-	
+
 	return value + offset
 
 #--------------------------------------------------------
@@ -95,9 +99,9 @@ def AVG_DATA():
 	i = buff_ax = buff_ay = buff_az = 0
 	
 	while i<(buffer_size+101):
-		ax = read_raw_data(ACCEL_XOUT_H, AX_OFFSET)
-		ay = read_raw_data(ACCEL_YOUT_H, AY_OFFSET)
-		az = read_raw_data(ACCEL_ZOUT_H, AZ_OFFSET)
+		ax = normalize_data(read_raw_data(ACCEL_XOUT_H), AX_OFFSET)
+		ay = normalize_data(read_raw_data(ACCEL_YOUT_H), AY_OFFSET)
+		az = normalize_data(read_raw_data(ACCEL_ZOUT_H), AZ_OFFSET)
 
 		if(i>100 and  i<=(buffer_size+100)):
 			buff_ax = buff_ax + ax
@@ -138,7 +142,7 @@ def CALIBRATE():
 		AY_OFFSET = c_ay_offset
 		AZ_OFFSET = c_az_offset
 
-		print(AX_OFFSET, AY_OFFSET, AZ_OFFSET)
+		# print(AX_OFFSET, AY_OFFSET, AZ_OFFSET)
 		
 		avg_ax, avg_ay, avg_az = AVG_DATA()
 
@@ -161,6 +165,26 @@ def CALIBRATE():
 			break
 
 #--------------------------------------------------------
+#   Collect Data
+#--------------------------------------------------------
+def get_samples(size):
+
+	samples = []
+	i=0
+	
+	while i<size:
+
+		acc_x = read_raw_data(ACCEL_XOUT_H)
+		acc_y = read_raw_data(ACCEL_YOUT_H)
+		acc_z = read_raw_data(ACCEL_ZOUT_H)
+
+		samples.append([acc_x, acc_y, acc_z, time.time()])
+		
+		i+=1
+
+	return samples
+
+#--------------------------------------------------------
 #	Execution
 #--------------------------------------------------------
 MPU_INIT()
@@ -169,18 +193,21 @@ print("Calibrating...")
 CALIBRATE()
 
 print("Reading data...")
+s = get_samples(1000)
 
-while True:
+print(s)
+
+# while True:
 	
-	#Read Accelerometer raw value
-	acc_x = read_raw_data(ACCEL_XOUT_H, AX_OFFSET)
-	acc_y = read_raw_data(ACCEL_YOUT_H, AY_OFFSET)
-	acc_z = read_raw_data(ACCEL_ZOUT_H, AZ_OFFSET)
+# 	#Read Accelerometer raw value
+# 	acc_x = read_raw_data(ACCEL_XOUT_H, AX_OFFSET)
+# 	acc_y = read_raw_data(ACCEL_YOUT_H, AY_OFFSET)
+# 	acc_z = read_raw_data(ACCEL_ZOUT_H, AZ_OFFSET)
 
 	#sensitivity scale factor
-	Ax = acc_x/2048.0
-	Ay = acc_y/2048.0
-	Az = acc_z/2048.0
+	# Ax = acc_x/2048.0
+	# Ay = acc_y/2048.0
+	# Az = acc_z/2048.0
 
-	print(Ax, Ay, Az)
+	# print(Ax, Ay, Az)
 
