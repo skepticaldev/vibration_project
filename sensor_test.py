@@ -1,6 +1,7 @@
 import smbus
 import time
 
+from matplotlib import pyplot as plt
 #--------------------------------------------------------
 # MPU6050 Registers and addresses
 #--------------------------------------------------------
@@ -199,16 +200,29 @@ normalized_samples = []
 
 initial_time = samples[0][3]
 
+norm_x_list = []
+norm_y_list = []
+norm_z_list = []
+norm_time_list = []
+
 for sample in samples:
 	norm_x = (signed_data(sample[0]) + AX_OFFSET)/2048.0
 	norm_y = (signed_data(sample[1]) + AY_OFFSET)/2048.0
 	norm_z = (signed_data(sample[2]) + AZ_OFFSET)/2048.0
 	norm_time = sample[3]-initial_time
 
+	norm_x_list.append(norm_x)
+	norm_y_list.append(nomr_y)
+	norm_z_list.append(norm_z)
+	norm_time_list.append(norm_time)
+
 	normalized_samples.append([norm_x, norm_y, norm_z, norm_time])
 
 for nSample in normalized_samples:
 	print(nSample)
+
+plt.plot(norm_z,norm_time)
+plt.show()
 
 # while True:
 	
