@@ -81,13 +81,13 @@ def read_raw_data(addr):
 	
 	return value
 
-def normalize_data(value, offset):
+def signed_data(value):
 
 	#to get signed value from mpu6050
 	if(value>32768):
 		value = value - 65536
 
-	return value + offset
+	return value
 
 #--------------------------------------------------------
 # Calculate average sample function
@@ -99,9 +99,9 @@ def AVG_DATA():
 	i = buff_ax = buff_ay = buff_az = 0
 	
 	while i<(buffer_size+101):
-		ax = normalize_data(read_raw_data(ACCEL_XOUT_H), AX_OFFSET)
-		ay = normalize_data(read_raw_data(ACCEL_YOUT_H), AY_OFFSET)
-		az = normalize_data(read_raw_data(ACCEL_ZOUT_H), AZ_OFFSET)
+		ax = signed_data(read_raw_data(ACCEL_XOUT_H)) + AX_OFFSET
+		ay = signed_data(read_raw_data(ACCEL_YOUT_H)) + AY_OFFSET
+		az = signed_data(read_raw_data(ACCEL_ZOUT_H)) + AZ_OFFSET
 
 		if(i>100 and  i<=(buffer_size+100)):
 			buff_ax = buff_ax + ax
@@ -193,9 +193,10 @@ print("Calibrating...")
 CALIBRATE()
 
 print("Reading data...")
-s = get_samples(1000)
+samples = get_samples(1000)
 
-print(s)
+for sample in samples:
+	print(sample)
 
 # while True:
 	
