@@ -1,8 +1,6 @@
 import smbus
 import time
-
-import matplotlib.pyplot as plt
-
+import csv
 #--------------------------------------------------------
 # MPU6050 Registers and addresses
 #--------------------------------------------------------
@@ -187,55 +185,62 @@ def get_samples(size):
 	return samples
 
 #--------------------------------------------------------
+#   Normalize Data
+#--------------------------------------------------------
+def normalize_samples(samples):
+
+	start_time = samples[0][3]
+	normalized_samples = []
+
+	norm_x_list = []
+	norm_y_list = []
+	norm_z_list = []
+	norm_time_list = []
+
+	for sample in samples:
+		norm_x = (signed_data(sample[0]) + AX_OFFSET)/2048.0
+		norm_y = (signed_data(sample[1]) + AY_OFFSET)/2048.0
+		norm_z = (signed_data(sample[2]) + AZ_OFFSET)/2048.0
+		norm_time = sample[3]-initial_time
+
+		norm_x_list.append(norm_x)
+		norm_y_list.append(norm_y)
+		norm_z_list.append(norm_z)
+		norm_time_list.append(norm_time)
+
+		normalized_samples.append([norm_x, norm_y, norm_z, norm_time])
+
+	return normalized_samples
+
+#--------------------------------------------------------
+#   Export CSV Data
+#--------------------------------------------------------
+def export_csv_data(data, sample_set):
+	
+	with open('sample_csv_file_set'+sample_set, mode='w') as csv_file:
+		fieldNames = ['Ax','Ay','Az','time']
+
+		writer= csv.DictWriter(csv_file, fieldnames=fieldNames)
+
+		writer.writeheader()
+		writer.writerows(data)
+
+#--------------------------------------------------------
 #	Execution
 #--------------------------------------------------------
 MPU_INIT()
 
+input("Press any key to calibrate...")
 print("Calibrating...")
 CALIBRATE()
 
+input("Press any key to Read data...")
 print("Reading data...")
+i = 0
 samples = get_samples(1000)
 
-normalized_samples = []
+print("Normalizing...")
+normalized_samples = normalize_samples(samples)
 
-initial_time = samples[0][3]
-
-norm_x_list = []
-norm_y_list = []
-norm_z_list = []
-norm_time_list = []
-
-for sample in samples:
-	norm_x = (signed_data(sample[0]) + AX_OFFSET)/2048.0
-	norm_y = (signed_data(sample[1]) + AY_OFFSET)/2048.0
-	norm_z = (signed_data(sample[2]) + AZ_OFFSET)/2048.0
-	norm_time = sample[3]-initial_time
-
-	norm_x_list.append(norm_x)
-	norm_y_list.append(norm_y)
-	norm_z_list.append(norm_z)
-	norm_time_list.append(norm_time)
-
-	normalized_samples.append([norm_x, norm_y, norm_z, norm_time])
-
-for nSample in normalized_samples:
-	print(nSample)
-
-plt.plot(norm_z,norm_time)
-plt.savefig('test.png')
-
-# while True:
-	
-# 	#Read Accelerometer raw value
-# 	acc_x = read_raw_data(ACCEL_XOUT_H, AX_OFFSET)
-# 	acc_y = read_raw_data(ACCEL_YOUT_H, AY_OFFSET)
-# 	acc_z = read_raw_data(ACCEL_ZOUT_H, AZ_OFFSET)
-
-	#sensitivity scale factor
-	# Ax = acc_x/2048.0
-	# Ay = acc_y/2048.0
-	# Az = acc_z/2048.0
-
-	# print(Ax, Ay, Az)
-
+sample_set+=1
+export_csv_data(normalized_samples, sample_set)
