@@ -201,7 +201,7 @@ def normalize_samples(samples):
 		norm_x = (signed_data(sample[0]) + AX_OFFSET)/2048.0
 		norm_y = (signed_data(sample[1]) + AY_OFFSET)/2048.0
 		norm_z = (signed_data(sample[2]) + AZ_OFFSET)/2048.0
-		norm_time = sample[3]-initial_time
+		norm_time = sample[3]-start_time
 
 		norm_x_list.append(norm_x)
 		norm_y_list.append(norm_y)
@@ -217,12 +217,12 @@ def normalize_samples(samples):
 #--------------------------------------------------------
 def export_csv_data(data, sample_set):
 	
-	with open('sample_csv_file_set'+sample_set, mode='w') as csv_file:
+	with open('sample_csv_file_set'+str(sample_set), 'w') as csv_file:
 		fieldNames = ['Ax','Ay','Az','time']
+		
+		row_list = data.insert(0,fieldNames)
 
-		writer= csv.DictWriter(csv_file, fieldnames=fieldNames)
-
-		writer.writeheader()
+		writer = csv.writer(csv_file)
 		writer.writerows(data)
 
 #--------------------------------------------------------
@@ -230,13 +230,11 @@ def export_csv_data(data, sample_set):
 #--------------------------------------------------------
 MPU_INIT()
 
-input("Press any key to calibrate...")
 print("Calibrating...")
-CALIBRATE()
+#CALIBRATE()
 
-input("Press any key to Read data...")
 print("Reading data...")
-i = 0
+sample_set = 0
 samples = get_samples(1000)
 
 print("Normalizing...")
