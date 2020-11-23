@@ -78,7 +78,7 @@ def read_raw_data(addr):
 	
 	#concatenate higher and lower value
 	value = ((high << 8) | low)
-	
+	print(value)
 	return value
 
 def signed_data(value):
@@ -230,15 +230,22 @@ def export_csv_data(data, sample_set):
 #--------------------------------------------------------
 MPU_INIT()
 
+input("Press enter to continue...")
 print("Calibrating...")
-#CALIBRATE()
+CALIBRATE()
 
-print("Reading data...")
+key = input("Press enter to continue...")
 sample_set = 0
-samples = get_samples(1000)
+while(key!='s'):
 
-print("Normalizing...")
-normalized_samples = normalize_samples(samples)
+	print("Reading data...")
 
-sample_set+=1
-export_csv_data(normalized_samples, sample_set)
+	samples = get_samples(1000)
+
+	print("Normalizing...")
+	normalized_samples = normalize_samples(samples)
+
+	sample_set+=1
+	export_csv_data(normalized_samples, sample_set)
+
+	key = input("Press enter to continue or s to stop...")
