@@ -56,7 +56,7 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 tuple <double, double, double> calibrate(int file, int range_error, int buffer_size);
 
 //Collect Data
-void get_samples(int file, int size, int16_t buffer[][3]);
+void collect_samples(int file, int size, int16_t buffer[][3]);
 
 // Main function
 int main() {
@@ -79,26 +79,17 @@ int main() {
 	// MPU configuration
 	mpu_init(file_i2c);
 
-	
-//	auto start = chrono::steady_clock::now();
-//	int i = 0;
-//	for(i=0;i<=999;i++){
-//		read_raw_data(file_i2c, ACCEL_ZOUT_H);
-//		read_raw_data(file_i2c, ACCEL_XOUT_H);
-//		read_raw_data(file_i2c, ACCEL_YOUT_H);
+	int16_t samples[1024][3];
+	chrono::steady_clock::time_point sample_time[1024];
+
+	chrono::steady_clock::time_point start = chrono::steady_clock::now();
+	collect_samples(file_i2c, 1024, samples);
+	chrono::steady_clock::time_point end = chrono::steady_clock::now();
+	cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(end-start).count()<< " ms"<<endl;
+
+//	for(int i = 0; i<1000;i++){
+//		cout<<samples[i][0]<< " " << samples[i][1] << " " << samples[i][2] << endl;
 //	}
-//	auto end = chrono::steady_clock::now();
-//	cout<<"Elapsed milliseconds: "
-//		<<chrono::duration_cast<chrono::milliseconds>(end-start).count()
-//		<<" ms"<<endl;
-
-//	cout << signed_value(read_raw_data(file_i2c, ACCEL_ZOUT_H)) << endl;
-
-	double avg_x, avg_y, avg_z;
-
-	tie(avg_x, avg_y, avg_z) = calibrate(file_i2c, RANGE_ERROR, 1000);
-
-	cout<< avg_x << " " << avg_y<< " " << avg_z << endl;
 
 	printf("Hello World!\n");
 	return 0;
@@ -160,14 +151,13 @@ int16_t read_raw_data(int file, __u8 reg){
 }
 
 
-void get_samples(int file, int size, int16_t buffer[][3]){
+void collect_samples(int file, int size, int16_t buffer[][3]){
 	int i=0;
 
 	while (i<size) {
 		buffer[i][0] = read_raw_data(file, ACCEL_XOUT_H);
 		buffer[i][1] = read_raw_data(file, ACCEL_YOUT_H);
 		buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_H);
-
 		i+=1;
 	}
 }
