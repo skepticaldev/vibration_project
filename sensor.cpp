@@ -56,7 +56,11 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 tuple <double, double, double> calibrate(int file, int range_error, int buffer_size);
 
 //Collect Data
-void collect_samples(int file, int size, int16_t buffer[][3]);
+void collect_samples(
+	int file, 
+	int size, 
+	int16_t sample_buffer[][3], 
+	chrono::steady_clock::time_point time_buffer[]);
 
 // Main function
 int main() {
@@ -79,11 +83,11 @@ int main() {
 	// MPU configuration
 	mpu_init(file_i2c);
 
-	int16_t samples[1024][3];
-	chrono::steady_clock::time_point sample_time[1024];
+	int16_t sample_buffer[1024][3];
+	chrono::steady_clock::time_point time_buffer[1024];
 
 	chrono::steady_clock::time_point start = chrono::steady_clock::now();
-	collect_samples(file_i2c, 1024, samples);
+	collect_samples(file_i2c, 1024, sample_buffer, time_buffer);
 	chrono::steady_clock::time_point end = chrono::steady_clock::now();
 	cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(end-start).count()<< " ms"<<endl;
 
@@ -151,13 +155,18 @@ int16_t read_raw_data(int file, __u8 reg){
 }
 
 
-void collect_samples(int file, int size, int16_t buffer[][3]){
+void collect_samples(
+	int file, 
+	int size, 
+	int16_t sample_buffer[][3],
+	chrono::steady_clock::time_point time_buffer[]){
 	int i=0;
 
 	while (i<size) {
-		buffer[i][0] = read_raw_data(file, ACCEL_XOUT_H);
-		buffer[i][1] = read_raw_data(file, ACCEL_YOUT_H);
-		buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_H);
+		sample_buffer[i][0] = read_raw_data(file, ACCEL_XOUT_H);
+		sample_buffer[i][1] = read_raw_data(file, ACCEL_YOUT_H);
+		sample_buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_H);
+		time_buffer[i] = chrono::steady_clock::now();
 		i+=1;
 	}
 }
