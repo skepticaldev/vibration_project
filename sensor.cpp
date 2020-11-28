@@ -31,6 +31,7 @@
 //Calibration parameter
 #define RANGE_ERROR 10
 
+using namespace std;
 
 //--------------------------
 // Function declarations
@@ -49,12 +50,10 @@ int16_t read_raw_data(int file, __u8 reg);
 int16_t signed_value(int16_t value);
 
 // Calculate average sample
-tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET=0.0, double Y_OFFSET=0.0, double Z_OFFSET=0.0);
+tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET, double Y_OFFSET, double Z_OFFSET);
 
 // Calibrate function
 tuple <double, double, double> calibrate(int file, int range_error);
-
-using namespace std;
 
 
 // Main function
@@ -79,17 +78,26 @@ int main() {
 	mpu_init(file_i2c);
 
 	
-	auto start = chrono::steady_clock::now();
-	int i = 0;
-	for(i=0;i<=999;i++){
-		read_raw_data(file_i2c, ACCEL_ZOUT_H);
-		read_raw_data(file_i2c, ACCEL_XOUT_H);
-		read_raw_data(file_i2c, ACCEL_YOUT_H);
-	}
-	auto end = chrono::steady_clock::now();
-	cout<<"Elapsed milliseconds: "
-		<<chrono::duration_cast<chrono::milliseconds>(end-start).count()
-		<<" ms"<<endl;
+//	auto start = chrono::steady_clock::now();
+//	int i = 0;
+//	for(i=0;i<=999;i++){
+//		read_raw_data(file_i2c, ACCEL_ZOUT_H);
+//		read_raw_data(file_i2c, ACCEL_XOUT_H);
+//		read_raw_data(file_i2c, ACCEL_YOUT_H);
+//	}
+//	auto end = chrono::steady_clock::now();
+//	cout<<"Elapsed milliseconds: "
+//		<<chrono::duration_cast<chrono::milliseconds>(end-start).count()
+//		<<" ms"<<endl;
+
+//	cout << signed_value(read_raw_data(file_i2c, ACCEL_ZOUT_H)) << endl;
+
+	double avg_x, avg_y, avg_z;
+
+	tie(avg_x, avg_y, avg_z) = calibrate(file_i2c, RANGE_ERROR);
+
+	cout<< avg_x << " " << avg_y<< " " << avg_z << endl;
+
 	printf("Hello World!\n");
 	return 0;
 }
@@ -177,12 +185,13 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 			avg_ay = buff_ay/buffer_size;
 			avg_az = buff_az/buffer_size;
 		}
-		i=+1;
+
+		i+=1;
 
 		sleep(0.002);
-
-		return make_tuple(avg_ax, avg_ay, avg_az);
 	}
+
+	return make_tuple(avg_ax, avg_ay, avg_az);
 }
 
 tuple <double, double, double> calibrate(int file, int range_error){
