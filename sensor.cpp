@@ -53,8 +53,10 @@ int16_t signed_value(int16_t value);
 tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET, double Y_OFFSET, double Z_OFFSET);
 
 // Calibrate function
-tuple <double, double, double> calibrate(int file, int range_error);
+tuple <double, double, double> calibrate(int file, int range_error, int buffer_size);
 
+//Collect Data
+void get_samples(int file, int size, int16_t buffer[][3]);
 
 // Main function
 int main() {
@@ -94,7 +96,7 @@ int main() {
 
 	double avg_x, avg_y, avg_z;
 
-	tie(avg_x, avg_y, avg_z) = calibrate(file_i2c, RANGE_ERROR);
+	tie(avg_x, avg_y, avg_z) = calibrate(file_i2c, RANGE_ERROR, 1000);
 
 	cout<< avg_x << " " << avg_y<< " " << avg_z << endl;
 
@@ -157,6 +159,19 @@ int16_t read_raw_data(int file, __u8 reg){
 	return value;
 }
 
+
+void get_samples(int file, int size, int16_t buffer[][3]){
+	int i=0;
+
+	while (i<size) {
+		buffer[i][0] = read_raw_data(file, ACCEL_XOUT_H);
+		buffer[i][1] = read_raw_data(file, ACCEL_YOUT_H);
+		buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_H);
+
+		i+=1;
+	}
+}
+
 int16_t signed_value(int16_t value){
 	if(value>32768){
 		value = value - 65536;
@@ -194,7 +209,7 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 	return make_tuple(avg_ax, avg_ay, avg_az);
 }
 
-tuple <double, double, double> calibrate(int file, int range_error){
+tuple <double, double, double> calibrate(int file, int range_error, int buffer_size){
 
 	double avg_x, avg_y,avg_z;
 	double x_offset = 0, y_offset = 0, z_offset = 0;
@@ -208,7 +223,7 @@ tuple <double, double, double> calibrate(int file, int range_error){
 	while (true) {
 		int ready = 0;
 
-		tie(avg_x, avg_y, avg_z) = avg_data(1000, file, x_offset, y_offset, z_offset);
+		tie(avg_x, avg_y, avg_z) = avg_data(buffer_size, file, x_offset, y_offset, z_offset);
 
 		if(abs(avg_x)<=range_error){
 			ready+=1;
