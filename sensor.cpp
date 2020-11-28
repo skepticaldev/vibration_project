@@ -65,6 +65,9 @@ void collect_samples(
 	//millisenconds
 	double control_time);
 
+// Calculate time between samples to reach desired frequency
+double calculate_control_time(int file, int buffer_size, int target_frequency, int range_error);
+
 // Main function
 int main() {
 
@@ -96,20 +99,21 @@ int main() {
 	//Calibration
 	//calibrate(file_i2c, RANGE_ERROR, 1000);
 
+	
+	//collect_samples(file_i2c, 1024, sample_buffer, time_buffer, 0.0);
 
-	collect_samples(file_i2c, 1024, sample_buffer, time_buffer, 0.0);
+	//for(int i=0; i<1024;i++){
+	//	cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<" "
+	//	<< chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-time_buffer[0]).count()<<endl;
+	//}
 
-	for(int i=0; i<1024;i++){
-		cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<" "
-		<< chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-time_buffer[0]).count()<<endl;
-	}
-
-	cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(time_buffer[1023]-time_buffer[0]).count()<< " ms"<<endl;
+	//cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(time_buffer[1023]-time_buffer[0]).count()<< " ms"<<endl;
 
 //	for(int i = 0; i<1000;i++){
 //		cout<<samples[i][0]<< " " << samples[i][1] << " " << samples[i][2] << endl;
 //	}
 
+	calculate_control_time(file_i2c, 500, 1000, 5);
 	printf("Hello World!\n");
 	return 0;
 }
@@ -267,28 +271,47 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 	}
 }
 
-void calculate_control_time(int file, int buffer_size, int target_frequency, int range_error) {
+double calculate_control_time(int file, int buffer_size, int target_frequency, int range_error) {
 
+	//Control time
 	double c_time = 0.0;
 
+	//target period time in microseconds us
+	double target_us_time = 1*1000000/(double)target_frequency;
+	
 	while(true) {
 		chrono::steady_clock::time_point start =  chrono::steady_clock::now();
+		
+		struct timespec req = {0};
+		req.tv_sec = 0;
+		req.tv_nsec = c_time * 1000000L;
+		
+		cout<<"c_time: "<<c_time<<endl;
 
 		for(int i=0;i<buffer_size;i++) {
 			read_raw_data(file, ACCEL_XOUT_H);
 			read_raw_data(file, ACCEL_YOUT_H);
 			read_raw_data(file, ACCEL_ZOUT_H);
-			nanosleep((const struct timespec[]){{0, c_time * 1000000L}}, NULL);
+			nanosleep(&req, (struct timespec *) NULL);
 		}
 
 		chrono::steady_clock::time_point end =  chrono::steady_clock::now();
-
-		int total = chrono::duration_cast<chrono::milliseconds>(end-start).count();
-
-		double freq = 1*1000/(total/buffer_size);
-
-		cout<< "frequencia: " << freq <<endl;
 		
-		return;
+		int64_t total = chrono::duration_cast<chrono::microseconds>(end-start).count();
+		//acquisition period
+		double t_time = total/(double)buffer_size;
+
+		double error = abs(target_us_time - t_time);
+
+		cout<<"error: " << error << endl;
+		
+		double freq = 1*1000000/(double)t_time;
+		
+		cout<< "freq "<< freq << endl;
+
+		if(abs(freq-target_frequency)<=range_error){
+			return c_time;
+		}
+		c_time = c_time + (error/(double)range_error)/1000;
 	}
 }
