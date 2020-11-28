@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <sys/types.h>
+#include <time.h>
 #include <chrono>
 #include <iostream>
 #include <tuple>
@@ -59,8 +60,8 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 void collect_samples(
 	int file, 
 	int size, 
-	int16_t sample_buffer[][3], 
-	chrono::steady_clock::time_point time_buffer[]);
+	int16_t sample_buffer[][3],
+	chrono::steady_clock::time_point time_buffer[], double control_time);
 
 // Main function
 int main() {
@@ -87,9 +88,15 @@ int main() {
 	chrono::steady_clock::time_point time_buffer[1024];
 
 	chrono::steady_clock::time_point start = chrono::steady_clock::now();
-	collect_samples(file_i2c, 1024, sample_buffer, time_buffer);
+	collect_samples(file_i2c, 1024, sample_buffer, time_buffer, 0.0);
 	chrono::steady_clock::time_point end = chrono::steady_clock::now();
-	cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(end-start).count()<< " ms"<<endl;
+
+	for(int i=0; i<1024;i++){
+		cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<" "
+		<< chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-start).count()<<endl;
+	}
+
+	cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(time_buffer[1023]-start).count()<< " ms"<<endl;
 
 //	for(int i = 0; i<1000;i++){
 //		cout<<samples[i][0]<< " " << samples[i][1] << " " << samples[i][2] << endl;
@@ -159,14 +166,20 @@ void collect_samples(
 	int file, 
 	int size, 
 	int16_t sample_buffer[][3],
-	chrono::steady_clock::time_point time_buffer[]){
+	chrono::steady_clock::time_point time_buffer[],
+	double control_time){
 	int i=0;
+
+	struct timespec req = {0};
+	req.tv_sec = 0;
+	req.tv_nsec = control_time * 1000000L;
 
 	while (i<size) {
 		sample_buffer[i][0] = read_raw_data(file, ACCEL_XOUT_H);
 		sample_buffer[i][1] = read_raw_data(file, ACCEL_YOUT_H);
 		sample_buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_H);
 		time_buffer[i] = chrono::steady_clock::now();
+		nanosleep(&req, (struct timespec *)NULL);
 		i+=1;
 	}
 }
