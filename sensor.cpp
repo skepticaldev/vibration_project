@@ -2,6 +2,7 @@
 #include <sys/types.h>
 #include <chrono>
 #include <iostream>
+#include <tuple>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -27,6 +28,9 @@
 // MPU6050 device address
 #define DEVICE_ADDRESS 0x68
 
+//Calibration parameter
+#define RANGE_ERROR 10
+
 
 //--------------------------
 // Function declarations
@@ -44,6 +48,12 @@ int16_t read_raw_data(int file, __u8 reg);
 // Get signed values
 int16_t signed_value(int16_t value);
 
+// Calculate average sample
+tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET=0.0, double Y_OFFSET=0.0, double Z_OFFSET=0.0);
+
+// Calibrate function
+tuple <double, double, double> calibrate(int file, int range_error);
+
 using namespace std;
 
 
@@ -51,7 +61,6 @@ using namespace std;
 int main() {
 	int file_i2c;
 	int length;
-	unsigned char buffer[60] ={0};
 
 	//------ OPEN THE I2C BUS ------
 	char *filename = (char*)"/dev/i2c-1";
@@ -147,8 +156,71 @@ int16_t signed_value(int16_t value){
 	return value;
 }
 
-double avg_data(){
+tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET=0, double Y_OFFSET=0, double Z_OFFSET=0){
+	
 	double avg_ax = 0, avg_ay = 0, avg_az = 0;
-
+	
+	double buff_ax = 0, buff_ay = 0, buff_az = 0;
+	
 	int i = 0;
+
+	while (i<buffer_size+101) {
+		
+		if(i>100 && i<=(buffer_size+100)) {
+			buff_ax = buff_ax + signed_value(read_raw_data(file, ACCEL_XOUT_H)) + X_OFFSET;
+			buff_ay = buff_ay + signed_value(read_raw_data(file, ACCEL_YOUT_H)) + Y_OFFSET;
+			buff_az = buff_az + signed_value(read_raw_data(file, ACCEL_ZOUT_H)) + Z_OFFSET;
+		}
+
+		if (i==(buffer_size+100)) {
+			avg_ax = buff_ax/buffer_size;
+			avg_ay = buff_ay/buffer_size;
+			avg_az = buff_az/buffer_size;
+		}
+		i=+1;
+
+		sleep(0.002);
+
+		return make_tuple(avg_ax, avg_ay, avg_az);
+	}
+}
+
+tuple <double, double, double> calibrate(int file, int range_error){
+
+	double avg_x, avg_y,avg_z;
+	double x_offset = 0, y_offset = 0, z_offset = 0;
+
+	tie(avg_x, avg_y, avg_z) = avg_data(1000, file, 0, 0, 0);
+
+	x_offset = -avg_x/range_error;
+	y_offset = -avg_y/range_error;
+	z_offset = (2048.0 - avg_z)/range_error;
+
+	while (true) {
+		int ready = 0;
+
+		tie(avg_x, avg_y, avg_z) = avg_data(1000, file, x_offset, y_offset, z_offset);
+
+		if(abs(avg_x)<=range_error){
+			ready+=1;
+		} else {
+			x_offset = x_offset - avg_x/range_error;
+		}
+		
+		if(abs(avg_y)<=range_error){
+			ready+=1;
+		} else {
+			y_offset = y_offset - avg_y/range_error;
+		}
+
+		if(abs(avg_z)<=range_error){
+			ready+=1;
+		} else {
+			z_offset = z_offset - avg_z/range_error;
+		}
+
+		if(ready==3){
+			return make_tuple(x_offset, y_offset, z_offset);
+		}
+	}
 }
