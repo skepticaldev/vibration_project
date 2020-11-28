@@ -61,10 +61,13 @@ void collect_samples(
 	int file, 
 	int size, 
 	int16_t sample_buffer[][3],
-	chrono::steady_clock::time_point time_buffer[], double control_time);
+	chrono::steady_clock::time_point time_buffer[], 
+	//millisenconds
+	double control_time);
 
 // Main function
 int main() {
+
 	int file_i2c;
 	int length;
 
@@ -84,19 +87,24 @@ int main() {
 	// MPU configuration
 	mpu_init(file_i2c);
 
+	// Buffer to collect samples
 	int16_t sample_buffer[1024][3];
+
+	// Buffer to collect aquicsition times
 	chrono::steady_clock::time_point time_buffer[1024];
 
-	chrono::steady_clock::time_point start = chrono::steady_clock::now();
+	//Calibration
+	//calibrate(file_i2c, RANGE_ERROR, 1000);
+
+
 	collect_samples(file_i2c, 1024, sample_buffer, time_buffer, 0.0);
-	chrono::steady_clock::time_point end = chrono::steady_clock::now();
 
 	for(int i=0; i<1024;i++){
 		cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<" "
-		<< chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-start).count()<<endl;
+		<< chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-time_buffer[0]).count()<<endl;
 	}
 
-	cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(time_buffer[1023]-start).count()<< " ms"<<endl;
+	cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(time_buffer[1023]-time_buffer[0]).count()<< " ms"<<endl;
 
 //	for(int i = 0; i<1000;i++){
 //		cout<<samples[i][0]<< " " << samples[i][1] << " " << samples[i][2] << endl;
@@ -214,8 +222,6 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 		}
 
 		i+=1;
-
-		sleep(0.002);
 	}
 
 	return make_tuple(avg_ax, avg_ay, avg_az);
@@ -258,5 +264,31 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 		if(ready==3){
 			return make_tuple(x_offset, y_offset, z_offset);
 		}
+	}
+}
+
+void calculate_control_time(int file, int buffer_size, int target_frequency, int range_error) {
+
+	double c_time = 0.0;
+
+	while(true) {
+		chrono::steady_clock::time_point start =  chrono::steady_clock::now();
+
+		for(int i=0;i<buffer_size;i++) {
+			read_raw_data(file, ACCEL_XOUT_H);
+			read_raw_data(file, ACCEL_YOUT_H);
+			read_raw_data(file, ACCEL_ZOUT_H);
+			nanosleep((const struct timespec[]){{0, c_time * 1000000L}}, NULL);
+		}
+
+		chrono::steady_clock::time_point end =  chrono::steady_clock::now();
+
+		int total = chrono::duration_cast<chrono::milliseconds>(end-start).count();
+
+		double freq = 1*1000/(total/buffer_size);
+
+		cout<< "frequencia: " << freq <<endl;
+		
+		return;
 	}
 }
