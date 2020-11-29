@@ -126,30 +126,40 @@ int main() {
 	double c_time = calculate_control_time(file_i2c, 500, 1000, 5);
 	cout<<"Control time:"<< c_time << endl;
 
-	// Buffer to collect samples
-	int16_t sample_buffer[buffer_size][3];
+	char key;
+	cout<<"Press a key to continue or s to stop: ";
+	cin >> key;
 
-	// Buffer to collect aquicsition times
-	chrono::steady_clock::time_point time_buffer[buffer_size];
+	while(key!="s"){
 
-	cout<<"Collecting samples..."<<endl;
-	collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, c_time);
+		// Buffer to collect samples
+		int16_t sample_buffer[buffer_size][3];
 
-	for(int i=0; i<1024;i++){
-		cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
+		// Buffer to collect aquicsition times
+		chrono::steady_clock::time_point time_buffer[buffer_size];
+
+		cout<<"Collecting samples..."<<endl;
+		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, c_time);
+
+		for(int i=0; i<1024;i++){
+			cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
+		}
+
+		double data_buffer[buffer_size][4];
+
+		cout<<"Normalizing samples..."<<endl;
+		normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 2048);
+
+		for(int i=0; i<1024;i++){
+			cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
+		}
+
+		cout<<"Exporting data..."<<endl;
+		export_csv_data(data_buffer, buffer_size, 1);
+
+		cout<<"Press s to stop or enter to continue: ";
+		cin >> key;
 	}
-
-	double data_buffer[buffer_size][4];
-
-	cout<<"Normalizing samples..."<<endl;
-	normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 2048);
-
-	for(int i=0; i<1024;i++){
-		cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
-	}
-
-	cout<<"Exporting data..."<<endl;
-	export_csv_data(data_buffer, buffer_size, 1);
 
 	return 0;
 }
