@@ -287,7 +287,7 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 			y_offset = y_offset - avg_y/range_error;
 		}
 
-		if(abs(avg_z)<=range_error){
+		if(abs(2048.0 - avg_z)<=range_error){
 			ready+=1;
 		} else {
 			z_offset = z_offset + (2048.0 - avg_z)/range_error;
