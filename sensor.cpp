@@ -73,6 +73,17 @@ double calculate_control_time(int file,
 	// allowed error in hertz 
 	int range_error);
 
+//Normalize samples
+void normalize_samples(
+	double data_buffer[][4], 
+	int buffer_size, 
+	double sample_buffer[][3], 
+	double time_buffer[], 
+	double x_offset, 
+	double y_offset, 
+	double z_offset, 
+	int scale_factor);
+
 // Main function
 int main() {
 
@@ -95,32 +106,32 @@ int main() {
 	// MPU configuration
 	mpu_init(file_i2c);
 
+	int buffer_size = 1024;
+
+	double x_offset = 0, y_offset = 0, z_offset = 0;
+
 	//Calibration
-	//calibrate(file_i2c, RANGE_ERROR, 1000);
+	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, 1000);
 
 	//Calculate time to control frequency
 	double c_time = calculate_control_time(file_i2c, 500, 1000, 5);
 
 	// Buffer to collect samples
-	int16_t sample_buffer[1024][3];
+	int16_t sample_buffer[buffer_size][3];
 
 	// Buffer to collect aquicsition times
 	chrono::steady_clock::time_point time_buffer[1024];
 
-	collect_samples(file_i2c, 1024, sample_buffer, time_buffer, c_time);
+	collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, c_time);
 
-	//for(int i=0; i<1024;i++){
-	//	cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<" "
-	//	<< chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-time_buffer[0]).count()<<endl;
-	//}
+	double data_buffer[buffer_size][4];
 
-	cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(time_buffer[1023]-time_buffer[0]).count()<< " ms"<<endl;
+	normalize_samples(data_buffer,buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 2048);
 
-//	for(int i = 0; i<1000;i++){
-//		cout<<samples[i][0]<< " " << samples[i][1] << " " << samples[i][2] << endl;
-//	}
+	for(int i=0; i<1024;i++){
+		cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
+	}
 
-	printf("Hello World!\n");
 	return 0;
 }
 
@@ -321,5 +332,25 @@ double calculate_control_time(int file, int buffer_size, int target_frequency, i
 
 		// add time to control_time to decrease frequency
 		c_time = c_time + (error/(double)range_error)/1000;
+	}
+}
+
+void normalize_samples(
+	double data_buffer[][4], 
+	int buffer_size, 
+	double sample_buffer[][3], 
+	double time_buffer[], 
+	double x_offset, 
+	double y_offset, 
+	double z_offset, 
+	int scale_factor) {
+
+	start_time = time_buffer[0];
+
+	for(int i =0;i<buffer_size;i++)	{
+		data_buffer[i][0] = (double) chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-start_time).count();
+		data_buffer[i][1] = (signed_value(sample_buffer[i][0])+x_offset)/(double)scale_factor;
+		data_buffer[i][2] = (signed_value(sample_buffer[i][1])+y_offset)/(double)scale_factor;
+		data_buffer[i][3] = (signed_value(sample_buffer[i][2])+z_offset)/(double)scale_factor;
 	}
 }
