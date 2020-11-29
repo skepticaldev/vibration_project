@@ -345,7 +345,7 @@ void normalize_samples(
 	double z_offset, 
 	int scale_factor) {
 
-	start_time = time_buffer[0];
+	chrono::steady_clock::time_point  start_time = time_buffer[0];
 
 	for(int i =0;i<buffer_size;i++)	{
 		data_buffer[i][0] = (double) chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-start_time).count();
