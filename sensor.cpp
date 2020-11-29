@@ -264,7 +264,7 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 	double avg_x, avg_y,avg_z;
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
-	tie(avg_x, avg_y, avg_z) = avg_data(1000, file, 0, 0, 0);
+	tie(avg_x, avg_y, avg_z) = avg_data(buffer_size, file, 0, 0, 0);
 
 	x_offset = -avg_x/range_error;
 	y_offset = -avg_y/range_error;
@@ -290,7 +290,7 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 		if(abs(avg_z)<=range_error){
 			ready+=1;
 		} else {
-			z_offset = z_offset - avg_z/range_error;
+			z_offset = z_offset + (2048.0 - avg_z)/range_error;
 		}
 
 		if(ready==3){
