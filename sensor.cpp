@@ -66,7 +66,12 @@ void collect_samples(
 	double control_time);
 
 // Calculate time between samples to reach desired frequency
-double calculate_control_time(int file, int buffer_size, int target_frequency, int range_error);
+double calculate_control_time(int file, 
+	int buffer_size,
+	// Frequency in hertz 
+	int target_frequency,
+	// allowed error in hertz 
+	int range_error);
 
 // Main function
 int main() {
@@ -90,30 +95,31 @@ int main() {
 	// MPU configuration
 	mpu_init(file_i2c);
 
+	//Calibration
+	//calibrate(file_i2c, RANGE_ERROR, 1000);
+
+	//Calculate time to control frequency
+	double c_time = calculate_control_time(file_i2c, 500, 1000, 5);
+
 	// Buffer to collect samples
 	int16_t sample_buffer[1024][3];
 
 	// Buffer to collect aquicsition times
 	chrono::steady_clock::time_point time_buffer[1024];
 
-	//Calibration
-	//calibrate(file_i2c, RANGE_ERROR, 1000);
-
-	
-	//collect_samples(file_i2c, 1024, sample_buffer, time_buffer, 0.0);
+	collect_samples(file_i2c, 1024, sample_buffer, time_buffer, c_time);
 
 	//for(int i=0; i<1024;i++){
 	//	cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<" "
 	//	<< chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-time_buffer[0]).count()<<endl;
 	//}
 
-	//cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(time_buffer[1023]-time_buffer[0]).count()<< " ms"<<endl;
+	cout<<"Elapsed millliseconds: " << chrono::duration_cast<chrono::milliseconds>(time_buffer[1023]-time_buffer[0]).count()<< " ms"<<endl;
 
 //	for(int i = 0; i<1000;i++){
 //		cout<<samples[i][0]<< " " << samples[i][1] << " " << samples[i][2] << endl;
 //	}
 
-	calculate_control_time(file_i2c, 500, 1000, 5);
 	printf("Hello World!\n");
 	return 0;
 }
