@@ -104,6 +104,7 @@ int main() {
 	}
 
 	// MPU configuration
+	cout<<"Initializing..."<<endl;
 	mpu_init(file_i2c);
 
 	int buffer_size = 1024;
@@ -111,10 +112,14 @@ int main() {
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
 	//Calibration
-	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, 1000);
+	cout<<"Calibrating..."<<endl;
+	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, buffer_size);
+	cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
 
 	//Calculate time to control frequency
+	cout<<"Calculating control time..."<<endl;
 	double c_time = calculate_control_time(file_i2c, 500, 1000, 5);
+	cout<<"Control time:"<< c_time << endl;
 
 	// Buffer to collect samples
 	int16_t sample_buffer[buffer_size][3];
@@ -122,10 +127,12 @@ int main() {
 	// Buffer to collect aquicsition times
 	chrono::steady_clock::time_point time_buffer[1024];
 
+	cout<<"Collecting samples..."<<endl;
 	collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, c_time);
 
 	double data_buffer[buffer_size][4];
 
+	cout<<"Normalizing samples..."<<endl;
 	normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 2048);
 
 	for(int i=0; i<1024;i++){
@@ -345,10 +352,10 @@ void normalize_samples(
 	double z_offset, 
 	int scale_factor) {
 
-	chrono::steady_clock::time_point  start_time = time_buffer[0];
+	chrono::steady_clock::time_point start = time_buffer[0];
 
 	for(int i =0;i<buffer_size;i++)	{
-		data_buffer[i][0] = (double) chrono::duration_cast<chrono::milliseconds>(time_buffer[i]-start_time).count();
+		data_buffer[i][0] = (double) chrono::duration_cast<chrono::microseconds>(time_buffer[i]-start).count();
 		data_buffer[i][1] = (signed_value(sample_buffer[i][0])+x_offset)/(double)scale_factor;
 		data_buffer[i][2] = (signed_value(sample_buffer[i][1])+y_offset)/(double)scale_factor;
 		data_buffer[i][3] = (signed_value(sample_buffer[i][2])+z_offset)/(double)scale_factor;
