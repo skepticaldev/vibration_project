@@ -376,7 +376,7 @@ void normalize_samples(
 void export_csv_data(double data_buffer[][4], int buffer_size) {
 	ofstream sample_file("sample_csv_set.csv");
 
-	sample_file<<"time,Ax,Ay,Az";
+	sample_file<<"time,Ax,Ay,Az"<<endl;
 
 	for(int i=0;i<buffer_size;i++) {
 		sample_file<<data_buffer[i][0]<<","<<data_buffer[i][1]<<","<<data_buffer[i][2]<<","<<data_buffer[i][3]<<endl;
