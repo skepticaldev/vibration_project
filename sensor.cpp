@@ -77,8 +77,8 @@ double calculate_control_time(int file,
 void normalize_samples(
 	double data_buffer[][4], 
 	int buffer_size, 
-	double sample_buffer[][3], 
-	double time_buffer[], 
+	int16_t sample_buffer[][3], 
+	chrono::steady_clock::time_point time_buffer[], 
 	double x_offset, 
 	double y_offset, 
 	double z_offset, 
@@ -126,7 +126,7 @@ int main() {
 
 	double data_buffer[buffer_size][4];
 
-	normalize_samples(data_buffer,buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 2048);
+	normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 2048);
 
 	for(int i=0; i<1024;i++){
 		cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
@@ -338,8 +338,8 @@ double calculate_control_time(int file, int buffer_size, int target_frequency, i
 void normalize_samples(
 	double data_buffer[][4], 
 	int buffer_size, 
-	double sample_buffer[][3], 
-	double time_buffer[], 
+	int16_t sample_buffer[][3], 
+	chrono::steady_clock::time_point time_buffer[], 
 	double x_offset, 
 	double y_offset, 
 	double z_offset, 
