@@ -130,6 +130,10 @@ int main() {
 	cout<<"Collecting samples..."<<endl;
 	collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, c_time);
 
+	for(int i=0; i<1024;i++){
+		cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
+	}
+
 	double data_buffer[buffer_size][4];
 
 	cout<<"Normalizing samples..."<<endl;
