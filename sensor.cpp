@@ -5,6 +5,7 @@
 #include <iostream>
 #include <tuple>
 #include <fstream>
+#include <string>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -75,7 +76,7 @@ double calculate_control_time(int file,
 	int range_error);
 
 //Export data to csv file
-void export_csv_data(double data_buffer[][4], int buffer_size);
+void export_csv_data(double data_buffer[][4], int buffer_size, int filename);
 
 //Normalize samples
 void normalize_samples(
@@ -148,7 +149,7 @@ int main() {
 	}
 
 	cout<<"Exporting data..."<<endl;
-	export_csv_data(data_buffer, buffer_size);
+	export_csv_data(data_buffer, buffer_size, 1);
 
 	return 0;
 }
@@ -373,8 +374,10 @@ void normalize_samples(
 	}
 }
 
-void export_csv_data(double data_buffer[][4], int buffer_size) {
-	ofstream sample_file("sample_csv_set.csv");
+void export_csv_data(double data_buffer[][4], int buffer_size, int index) {
+
+	string filename =  "sample_csv_set_" + to_string(index) + ".csv";
+	ofstream sample_file(filename);
 
 	sample_file<<"time,Ax,Ay,Az"<<endl;
 
