@@ -273,21 +273,20 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 
 double calculate_control_time(int file, int buffer_size, int target_frequency, int range_error) {
 
-	//Control time
+	//Control time in milliseconds
 	double c_time = 0.0;
 
 	//target period time in microseconds us
 	double target_us_time = 1*1000000/(double)target_frequency;
 	
 	while(true) {
+		// get start time to calculate total time
 		chrono::steady_clock::time_point start =  chrono::steady_clock::now();
 		
 		struct timespec req = {0};
 		req.tv_sec = 0;
 		req.tv_nsec = c_time * 1000000L;
 		
-		cout<<"c_time: "<<c_time<<endl;
-
 		for(int i=0;i<buffer_size;i++) {
 			read_raw_data(file, ACCEL_XOUT_H);
 			read_raw_data(file, ACCEL_YOUT_H);
@@ -295,23 +294,26 @@ double calculate_control_time(int file, int buffer_size, int target_frequency, i
 			nanosleep(&req, (struct timespec *) NULL);
 		}
 
+		// get end time to calculate total time
 		chrono::steady_clock::time_point end =  chrono::steady_clock::now();
 		
+		// Calculate total acquisition time
 		int64_t total = chrono::duration_cast<chrono::microseconds>(end-start).count();
-		//acquisition period
+		
+		// acquisition period
 		double t_time = total/(double)buffer_size;
+
+		// Calculate acquisition frequency (convert t_time to seconds) 
+		double freq = 1*1000000/(double)t_time;
+		
+		//If target frequency is higher, there is nothing to do
+		if((freq<target_frequency) || abs(freq-target_frequency)<=range_error){
+			return c_time;
+		}
 
 		double error = abs(target_us_time - t_time);
 
-		cout<<"error: " << error << endl;
-		
-		double freq = 1*1000000/(double)t_time;
-		
-		cout<< "freq "<< freq << endl;
-
-		if(abs(freq-target_frequency)<=range_error){
-			return c_time;
-		}
+		// add time to control_time to decrease frequency
 		c_time = c_time + (error/(double)range_error)/1000;
 	}
 }
