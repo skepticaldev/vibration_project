@@ -4,6 +4,7 @@
 #include <chrono>
 #include <iostream>
 #include <tuple>
+#include <fstream>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -73,6 +74,9 @@ double calculate_control_time(int file,
 	// allowed error in hertz 
 	int range_error);
 
+//Export data to csv file
+void export_csv_data(double data_buffer[][4], int buffer_size);
+
 //Normalize samples
 void normalize_samples(
 	double data_buffer[][4], 
@@ -125,7 +129,7 @@ int main() {
 	int16_t sample_buffer[buffer_size][3];
 
 	// Buffer to collect aquicsition times
-	chrono::steady_clock::time_point time_buffer[1024];
+	chrono::steady_clock::time_point time_buffer[buffer_size];
 
 	cout<<"Collecting samples..."<<endl;
 	collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, c_time);
@@ -142,6 +146,9 @@ int main() {
 	for(int i=0; i<1024;i++){
 		cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
 	}
+
+	cout<<"Exporting data..."<<endl;
+	export_csv_data(data_buffer, buffer_size);
 
 	return 0;
 }
@@ -359,9 +366,21 @@ void normalize_samples(
 	chrono::steady_clock::time_point start = time_buffer[0];
 
 	for(int i =0;i<buffer_size;i++)	{
-		data_buffer[i][0] = (double) chrono::duration_cast<chrono::microseconds>(time_buffer[i]-start).count();
+		data_buffer[i][0] = (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-start).count()/1000;
 		data_buffer[i][1] = (signed_value(sample_buffer[i][0])+x_offset)/(double)scale_factor;
 		data_buffer[i][2] = (signed_value(sample_buffer[i][1])+y_offset)/(double)scale_factor;
 		data_buffer[i][3] = (signed_value(sample_buffer[i][2])+z_offset)/(double)scale_factor;
 	}
+}
+
+void export_csv_data(double data_buffer[][4], int buffer_size) {
+	ofstream sample_file("sample_csv_set.csv");
+
+	sample_file<<"time,Ax,Ay,Az"
+
+	for(int i=0;i<buffer_size;i++) {
+		sample_file<<data_buffer[i][0]<<","<<data_buffer[i][1]<<","<<data_buffer[i][2]<<","<<data_buffer[i][3]<<endl;
+	}
+
+	sample_file.close();
 }
