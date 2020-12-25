@@ -112,18 +112,20 @@ int main() {
 	cout<<"Initializing..."<<endl;
 	mpu_init(file_i2c);
 
-	int buffer_size = 1024;
+	int buffer_size = 16384;
+
+	int calibrate_buffer_size = 1024;
 
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
 	//Calibration
 	cout<<"Calibrating..."<<endl;
-	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, buffer_size);
+	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, calibrate_buffer_size);
 	cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
 
 	//Calculate time to control frequency
 	cout<<"Calculating control time..."<<endl;
-	double c_time = calculate_control_time(file_i2c, 500, 1000, 5);
+	double c_time = calculate_control_time(file_i2c, calibrate_buffer_size, 1000, 5);
 	cout<<"Control time:"<< c_time << endl;
 
 	char key = 'c';
@@ -260,6 +262,10 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 	
 	int i = 0;
 
+	struct timespec req = {0};
+	req.tv_sec = 0;
+	req.tv_nsec = 0.3 * 1000000L;
+
 	while (i<buffer_size+101) {
 		
 		if(i>100 && i<=(buffer_size+100)) {
@@ -273,7 +279,8 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 			avg_ay = buff_ay/buffer_size;
 			avg_az = buff_az/buffer_size;
 		}
-
+		
+		nanosleep(&req, (struct timespec *) NULL);
 		i+=1;
 	}
 
