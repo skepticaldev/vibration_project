@@ -336,12 +336,13 @@ double calculate_control_time(int file, int buffer_size, int target_frequency, i
 	double target_us_time = 1*1000000/(double)target_frequency;
 	
 	while(true) {
-		// get start time to calculate total time
-		chrono::steady_clock::time_point start =  chrono::steady_clock::now();
-		
+
 		struct timespec req = {0};
 		req.tv_sec = 0;
 		req.tv_nsec = c_time * 1000000L;
+
+		// get start time to calculate total time
+		chrono::steady_clock::time_point start = chrono::steady_clock::now();
 		
 		for(int i=0;i<buffer_size;i++) {
 			read_raw_data(file, ACCEL_XOUT_H);
@@ -362,15 +363,19 @@ double calculate_control_time(int file, int buffer_size, int target_frequency, i
 		// Calculate acquisition frequency (convert t_time to seconds) 
 		double freq = 1*1000000/(double)t_time;
 		
-		//If target frequency is higher, there is nothing to do
-		if((freq<target_frequency) || abs(freq-target_frequency)<=range_error){
+		cout<<freq<<endl;
+
+		if(abs(freq-target_frequency)<=range_error){
 			return c_time;
 		}
 
-		double error = abs(target_us_time - t_time);
+		double error = target_us_time - t_time;
+		
+		cout<<"Time error: "<<error<<endl;		
 
 		// add time to control_time to decrease frequency
 		c_time = c_time + (error/(double)range_error)/1000;
+		cout<<"Control time"<<c_time<<endl;
 	}
 }
 
