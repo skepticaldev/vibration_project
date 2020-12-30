@@ -112,25 +112,28 @@ int main() {
 	cout<<"Initializing..."<<endl;
 	mpu_init(file_i2c);
 
-	int buffer_size = 1024;
+	int buffer_size = 16384;
+
+	int calibrate_buffer_size = 1024;
 
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
 	//Calibration
 	cout<<"Calibrating..."<<endl;
-	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, buffer_size);
+	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, calibrate_buffer_size);
 	cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
 
 	//Calculate time to control frequency
 	cout<<"Calculating control time..."<<endl;
-	double c_time = calculate_control_time(file_i2c, 500, 1000, 5);
+	double c_time = calculate_control_time(file_i2c, calibrate_buffer_size, 1000, 5);
 	cout<<"Control time:"<< c_time << endl;
 
-	char key;
-	cout<<"Press a key to continue or s to stop: ";
+	char key = 'c';
+	cout<<"Enter s to stop c to continue: ";
 	cin >> key;
+	int file_number = 1;
 
-	while(key!="s"){
+	while(key!='s'){
 
 		// Buffer to collect samples
 		int16_t sample_buffer[buffer_size][3];
@@ -141,24 +144,26 @@ int main() {
 		cout<<"Collecting samples..."<<endl;
 		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, c_time);
 
-		for(int i=0; i<1024;i++){
-			cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
-		}
+		//for(int i=0; i<1024;i++){
+		//	cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
+		//}
 
 		double data_buffer[buffer_size][4];
 
 		cout<<"Normalizing samples..."<<endl;
 		normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 2048);
 
-		for(int i=0; i<1024;i++){
-			cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
-		}
+		//for(int i=0; i<1024;i++){
+		//	cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
+		//}
 
 		cout<<"Exporting data..."<<endl;
-		export_csv_data(data_buffer, buffer_size, 1);
+		export_csv_data(data_buffer, buffer_size, file_number);
 
-		cout<<"Press s to stop or enter to continue: ";
+		cout<<"Enter s to stop or c to continue: ";
 		cin >> key;
+
+		file_number+=1;
 	}
 
 	return 0;
@@ -257,6 +262,10 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 	
 	int i = 0;
 
+	struct timespec req = {0};
+	req.tv_sec = 0;
+	req.tv_nsec = 0.3 * 1000000L;
+
 	while (i<buffer_size+101) {
 		
 		if(i>100 && i<=(buffer_size+100)) {
@@ -270,7 +279,8 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 			avg_ay = buff_ay/buffer_size;
 			avg_az = buff_az/buffer_size;
 		}
-
+		
+		nanosleep(&req, (struct timespec *) NULL);
 		i+=1;
 	}
 
@@ -326,12 +336,13 @@ double calculate_control_time(int file, int buffer_size, int target_frequency, i
 	double target_us_time = 1*1000000/(double)target_frequency;
 	
 	while(true) {
-		// get start time to calculate total time
-		chrono::steady_clock::time_point start =  chrono::steady_clock::now();
-		
+
 		struct timespec req = {0};
 		req.tv_sec = 0;
 		req.tv_nsec = c_time * 1000000L;
+
+		// get start time to calculate total time
+		chrono::steady_clock::time_point start = chrono::steady_clock::now();
 		
 		for(int i=0;i<buffer_size;i++) {
 			read_raw_data(file, ACCEL_XOUT_H);
@@ -352,15 +363,19 @@ double calculate_control_time(int file, int buffer_size, int target_frequency, i
 		// Calculate acquisition frequency (convert t_time to seconds) 
 		double freq = 1*1000000/(double)t_time;
 		
-		//If target frequency is higher, there is nothing to do
-		if((freq<target_frequency) || abs(freq-target_frequency)<=range_error){
+		cout<<freq<<endl;
+
+		if(abs(freq-target_frequency)<=range_error){
 			return c_time;
 		}
 
-		double error = abs(target_us_time - t_time);
+		double error = target_us_time - t_time;
+		
+		cout<<"Time error: "<<error<<endl;		
 
 		// add time to control_time to decrease frequency
 		c_time = c_time + (error/(double)range_error)/1000;
+		cout<<"Control time"<<c_time<<endl;
 	}
 }
 
