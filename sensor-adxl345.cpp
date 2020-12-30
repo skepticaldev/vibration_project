@@ -22,6 +22,9 @@
 //#define INT_ENABLE 0x38
 //#define FIFO_EN 0x23
 
+//Power 
+#define POWER_CLT 0x2D
+
 //Output data rate
 #define BW_RATE 0x2C 
 
@@ -120,25 +123,25 @@ int main() {
 	cout<<"Initializing..."<<endl;
 	mpu_init(file_i2c);
 
-	int buffer_size = 1024;
+	int buffer_size = 131072;
 
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
 	//Calibration
 	cout<<"Calibrating..."<<endl;
-	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, buffer_size);
+	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, 1000);
 	cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
 
 	//Calculate time to control frequency
-	cout<<"Calculating control time..."<<endl;
-	double c_time = calculate_control_time(file_i2c, 500, 1000, 5);
-	cout<<"Control time:"<< c_time << endl;
+	//cout<<"Calculating control time..."<<endl;
+	//double c_time = calculate_control_time(file_i2c, 500, 1000, 5);
+	//cout<<"Control time:"<< c_time << endl;
 
 	char key;
 	cout<<"Press a key to continue or s to stop: ";
 	cin >> key;
 
-	while(key!="s"){
+	while(key!='s'){
 
 		// Buffer to collect samples
 		int16_t sample_buffer[buffer_size][3];
@@ -147,20 +150,21 @@ int main() {
 		chrono::steady_clock::time_point time_buffer[buffer_size];
 
 		cout<<"Collecting samples..."<<endl;
-		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, c_time);
+		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, 0);
 
-		for(int i=0; i<1024;i++){
-			cout<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
-		}
+		//for(int i=0; i<buffer_size;i++){
+		//	cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
+		//	<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
+		//}
 
 		double data_buffer[buffer_size][4];
 
 		cout<<"Normalizing samples..."<<endl;
-		normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 2048);
+		normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 256);
 
-		for(int i=0; i<1024;i++){
-			cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
-		}
+		//for(int i=0; i<1024;i++){
+		//	cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
+		//}
 
 		cout<<"Exporting data..."<<endl;
 		export_csv_data(data_buffer, buffer_size, 1);
@@ -197,6 +201,9 @@ void mpu_init(int file) {
 	//write to FIFO_EN
 	//write_byte_data(file, FIFO_EN, 0x08);
 
+	//power
+	write_byte_data(file, POWER_CLT, 0x08);
+
 	//write to Output data rate
 	write_byte_data(file, BW_RATE, 0x0f);
 
@@ -228,7 +235,7 @@ int16_t read_raw_data(int file, __u8 reg){
 	write(file, payload, 1);
 	read(file,buffer,2);
 
-	int16_t value = (buffer[0]<<8)+buffer[1];
+	int16_t value = (buffer[1]<<8)+buffer[0];
 
 	return value;
 }
@@ -247,9 +254,9 @@ void collect_samples(
 	req.tv_nsec = control_time * 1000000L;
 
 	while (i<size) {
-		sample_buffer[i][0] = read_raw_data(file, ACCEL_XOUT_H);
-		sample_buffer[i][1] = read_raw_data(file, ACCEL_YOUT_H);
-		sample_buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_H);
+		sample_buffer[i][0] = read_raw_data(file, ACCEL_XOUT_L);
+		sample_buffer[i][1] = read_raw_data(file, ACCEL_YOUT_L);
+		sample_buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_L);
 		time_buffer[i] = chrono::steady_clock::now();
 		nanosleep(&req, (struct timespec *)NULL);
 		i+=1;
@@ -274,9 +281,9 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 	while (i<buffer_size+101) {
 		
 		if(i>100 && i<=(buffer_size+100)) {
-			buff_ax = buff_ax + signed_value(read_raw_data(file, ACCEL_XOUT_H)) + X_OFFSET;
-			buff_ay = buff_ay + signed_value(read_raw_data(file, ACCEL_YOUT_H)) + Y_OFFSET;
-			buff_az = buff_az + signed_value(read_raw_data(file, ACCEL_ZOUT_H)) + Z_OFFSET;
+			buff_ax = buff_ax + read_raw_data(file, ACCEL_XOUT_L) + X_OFFSET;
+			buff_ay = buff_ay + read_raw_data(file, ACCEL_YOUT_L) + Y_OFFSET;
+			buff_az = buff_az + read_raw_data(file, ACCEL_ZOUT_L) + Z_OFFSET;
 		}
 
 		if (i==(buffer_size+100)) {
@@ -300,7 +307,7 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 
 	x_offset = -avg_x/range_error;
 	y_offset = -avg_y/range_error;
-	z_offset = (2048.0 - avg_z)/range_error;
+	z_offset = -avg_z/range_error;
 
 	while (true) {
 		int ready = 0;
@@ -319,10 +326,10 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 			y_offset = y_offset - avg_y/range_error;
 		}
 
-		if(abs(2048.0 - avg_z)<=range_error){
+		if(abs(avg_z)<=range_error){
 			ready+=1;
 		} else {
-			z_offset = z_offset + (2048.0 - avg_z)/range_error;
+			z_offset = z_offset - avg_z/range_error;
 		}
 
 		if(ready==3){
@@ -348,9 +355,9 @@ double calculate_control_time(int file, int buffer_size, int target_frequency, i
 		req.tv_nsec = c_time * 1000000L;
 		
 		for(int i=0;i<buffer_size;i++) {
-			read_raw_data(file, ACCEL_XOUT_H);
-			read_raw_data(file, ACCEL_YOUT_H);
-			read_raw_data(file, ACCEL_ZOUT_H);
+			read_raw_data(file, ACCEL_XOUT_L);
+			read_raw_data(file, ACCEL_YOUT_L);
+			read_raw_data(file, ACCEL_ZOUT_L);
 			nanosleep(&req, (struct timespec *) NULL);
 		}
 
@@ -392,9 +399,9 @@ void normalize_samples(
 
 	for(int i =0;i<buffer_size;i++)	{
 		data_buffer[i][0] = (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-start).count()/1000;
-		data_buffer[i][1] = (signed_value(sample_buffer[i][0])+x_offset)/(double)scale_factor;
-		data_buffer[i][2] = (signed_value(sample_buffer[i][1])+y_offset)/(double)scale_factor;
-		data_buffer[i][3] = (signed_value(sample_buffer[i][2])+z_offset)/(double)scale_factor;
+		data_buffer[i][1] = (sample_buffer[i][0]+x_offset)/(double)scale_factor;
+		data_buffer[i][2] = (sample_buffer[i][1]+y_offset)/(double)scale_factor;
+		data_buffer[i][3] = (sample_buffer[i][2]+z_offset)/(double)scale_factor;
 	}
 }
 
