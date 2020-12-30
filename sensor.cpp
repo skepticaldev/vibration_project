@@ -112,9 +112,9 @@ int main() {
 	cout<<"Initializing..."<<endl;
 	mpu_init(file_i2c);
 
-	int buffer_size = 16384;
+	int buffer_size = 131072;
 
-	int calibrate_buffer_size = 1024;
+	int calibrate_buffer_size = 1000;
 
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
@@ -296,7 +296,7 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 
 	x_offset = -avg_x/range_error;
 	y_offset = -avg_y/range_error;
-	z_offset = (2048.0 - avg_z)/range_error;
+	z_offset = -avg_z/range_error;
 
 	while (true) {
 		int ready = 0;
@@ -315,10 +315,10 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 			y_offset = y_offset - avg_y/range_error;
 		}
 
-		if(abs(2048.0 - avg_z)<=range_error){
+		if(abs(avg_z)<=range_error){
 			ready+=1;
 		} else {
-			z_offset = z_offset + (2048.0 - avg_z)/range_error;
+			z_offset = z_offset - avg_z/range_error;
 		}
 
 		if(ready==3){
