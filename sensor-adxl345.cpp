@@ -48,9 +48,6 @@ void write_byte_data(int file, __u8 reg, __u8 byte);
 // Read MPU raw values LSB/g
 int16_t read_raw_data(int file, __u8 reg);
 
-// Get signed values
-int16_t signed_value(int16_t value);
-
 // Calculate average sample
 tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET, double Y_OFFSET, double Z_OFFSET);
 
@@ -65,14 +62,6 @@ void collect_samples(
 	chrono::steady_clock::time_point time_buffer[], 
 	//millisenconds
 	double control_time);
-
-// Calculate time between samples to reach desired frequency
-double calculate_control_time(int file, 
-	int buffer_size,
-	// Frequency in hertz 
-	int target_frequency,
-	// allowed error in hertz 
-	int range_error);
 
 // Export data to csv file
 void export_csv_data(double data_buffer[][4], int buffer_size, int filename);
@@ -209,7 +198,6 @@ int16_t read_raw_data(int file, __u8 reg){
 	return value;
 }
 
-
 void collect_samples(
 	int file, 
 	int size, 
@@ -305,53 +293,6 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 		if(ready==3){
 			return make_tuple(x_offset, y_offset, z_offset);
 		}
-	}
-}
-
-double calculate_control_time(int file, int buffer_size, int target_frequency, int range_error) {
-
-	//Control time in milliseconds
-	double c_time = 0.0;
-
-	//target period time in microseconds us
-	double target_us_time = 1*1000000/(double)target_frequency;
-	
-	while(true) {
-		// get start time to calculate total time
-		chrono::steady_clock::time_point start =  chrono::steady_clock::now();
-		
-		struct timespec req = {0};
-		req.tv_sec = 0;
-		req.tv_nsec = c_time * 1000000L;
-		
-		for(int i=0;i<buffer_size;i++) {
-			read_raw_data(file, ACCEL_XOUT_L);
-			read_raw_data(file, ACCEL_YOUT_L);
-			read_raw_data(file, ACCEL_ZOUT_L);
-			nanosleep(&req, (struct timespec *) NULL);
-		}
-
-		// get end time to calculate total time
-		chrono::steady_clock::time_point end =  chrono::steady_clock::now();
-		
-		// Calculate total acquisition time
-		int64_t total = chrono::duration_cast<chrono::microseconds>(end-start).count();
-		
-		// acquisition period
-		double t_time = total/(double)buffer_size;
-
-		// Calculate acquisition frequency (convert t_time to seconds) 
-		double freq = 1*1000000/(double)t_time;
-		
-		//If target frequency is higher, there is nothing to do
-		if((freq<target_frequency) || abs(freq-target_frequency)<=range_error){
-			return c_time;
-		}
-
-		double error = abs(target_us_time - t_time);
-
-		// add time to control_time to decrease frequency
-		c_time = c_time + (error/(double)range_error)/1000;
 	}
 }
 
