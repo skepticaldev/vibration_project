@@ -123,14 +123,14 @@ int main() {
 	cout<<"Initializing..."<<endl;
 	mpu_init(file_i2c);
 
-	int buffer_size = 131072;
+	int buffer_size = 1024;
 
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
 	//Calibration
-	cout<<"Calibrating..."<<endl;
-	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, 1000);
-	cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
+	//cout<<"Calibrating..."<<endl;
+	//tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, 2000);
+	//cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
 
 	//Calculate time to control frequency
 	//cout<<"Calculating control time..."<<endl;
@@ -140,6 +140,8 @@ int main() {
 	char key;
 	cout<<"Press a key to continue or s to stop: ";
 	cin >> key;
+
+	int file_number = 1;
 
 	while(key!='s'){
 
@@ -152,10 +154,10 @@ int main() {
 		cout<<"Collecting samples..."<<endl;
 		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, 0);
 
-		//for(int i=0; i<buffer_size;i++){
-		//	cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
-		//	<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
-		//}
+		for(int i=0; i<buffer_size;i++){
+			cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
+			<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
+		}
 
 		double data_buffer[buffer_size][4];
 
@@ -167,10 +169,12 @@ int main() {
 		//}
 
 		cout<<"Exporting data..."<<endl;
-		export_csv_data(data_buffer, buffer_size, 1);
+		export_csv_data(data_buffer, buffer_size, file_number);
 
 		cout<<"Press s to stop or enter to continue: ";
 		cin >> key;
+
+		file_number+=1;
 	}
 
 	return 0;
@@ -253,13 +257,12 @@ void collect_samples(
 	req.tv_sec = 0;
 	req.tv_nsec = control_time * 1000000L;
 
-	while (i<size) {
+	for (i=size;i<size;i++) {
 		sample_buffer[i][0] = read_raw_data(file, ACCEL_XOUT_L);
 		sample_buffer[i][1] = read_raw_data(file, ACCEL_YOUT_L);
 		sample_buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_L);
 		time_buffer[i] = chrono::steady_clock::now();
-		nanosleep(&req, (struct timespec *)NULL);
-		i+=1;
+		//nanosleep(&req, (struct timespec *)NULL);
 	}
 }
 
