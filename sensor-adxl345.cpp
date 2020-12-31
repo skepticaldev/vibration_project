@@ -12,16 +12,6 @@
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 
-/* MPU6050 Registers and addresses */
-//#define PWR_MGMT_1 0x6B
-//#define SMPLRT_DIV 0x19
-//#define DLPF_CFG 0x26
-//#define CONFIG 0x1A
-//#define GYRO_CONFIG 0x1B
-//#define ACCEL_CONFIG 0x1C
-//#define INT_ENABLE 0x38
-//#define FIFO_EN 0x23
-
 //Power 
 #define POWER_CLT 0x2D
 
@@ -31,13 +21,10 @@
 //Data format
 #define DATA_FORMAT 0x31
 
+//Data registry
 #define ACCEL_XOUT_L 0x32
 #define ACCEL_YOUT_L 0x34
 #define ACCEL_ZOUT_L 0x36
-
-//#define GYRO_XOUT_H 0x43
-//#define GYRO_YOUT_H 0x45
-//#define GYRO_ZOUT_H 0x47
 
 // ADXL345 device address
 #define DEVICE_ADDRESS 0x53
@@ -154,10 +141,10 @@ int main() {
 		cout<<"Collecting samples..."<<endl;
 		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, 0);
 
-		for(int i=0; i<buffer_size;i++){
-			cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
-			<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
-		}
+		//for(int i=0; i<buffer_size;i++){
+		//	cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
+		//	<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
+		//}
 
 		double data_buffer[buffer_size][4];
 
@@ -181,29 +168,6 @@ int main() {
 }
 
 void mpu_init(int file) {
-	// write to sample rate register
-	//write_byte_data(file, SMPLRT_DIV, 0x00);
-
-	//write to power management register
-	//write_byte_data(file, PWR_MGMT_1, 0x01);
-	
-	//write to configuration register
-	//write_byte_data(file, CONFIG, 0x00);
-
-	//write to gyro configuration register
-	//write_byte_data(file, GYRO_CONFIG, 0x18);
-
-	//write to accel configuration register
-	//write_byte_data(file, ACCEL_CONFIG, 0x18);
-
-	//write to interrupt enable register
-	//write_byte_data(file, INT_ENABLE, 0x01);
-	
-	//write to DLPF register
-	//write_byte_data(file, DLPF_CFG, 0x00);
-
-	//write to FIFO_EN
-	//write_byte_data(file, FIFO_EN, 0x08);
 
 	//power
 	write_byte_data(file, POWER_CLT, 0x08);
@@ -257,20 +221,13 @@ void collect_samples(
 	req.tv_sec = 0;
 	req.tv_nsec = control_time * 1000000L;
 
-	for (i=size;i<size;i++) {
+	for (i=0;i<size;i++) {
 		sample_buffer[i][0] = read_raw_data(file, ACCEL_XOUT_L);
 		sample_buffer[i][1] = read_raw_data(file, ACCEL_YOUT_L);
 		sample_buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_L);
 		time_buffer[i] = chrono::steady_clock::now();
 		//nanosleep(&req, (struct timespec *)NULL);
 	}
-}
-
-int16_t signed_value(int16_t value){
-	if(value>32768){
-		value = value - 65536;
-	}
-	return value;
 }
 
 tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET=0, double Y_OFFSET=0, double Z_OFFSET=0){
