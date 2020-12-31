@@ -6,6 +6,7 @@
 #include <tuple>
 #include <fstream>
 #include <string>
+#include <thread>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -38,7 +39,7 @@ using namespace std;
 // Function declarations
 //--------------------------
 
-//MPU config function
+// MPU config function
 void mpu_init(int file);
 
 // Write config values to registers
@@ -56,7 +57,7 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 // Calibrate function
 tuple <double, double, double> calibrate(int file, int range_error, int buffer_size);
 
-//Collect Data
+// Collect Data
 void collect_samples(
 	int file, 
 	int size, 
@@ -73,10 +74,10 @@ double calculate_control_time(int file,
 	// allowed error in hertz 
 	int range_error);
 
-//Export data to csv file
+// Export data to csv file
 void export_csv_data(double data_buffer[][4], int buffer_size, int filename);
 
-//Normalize samples
+// Normalize samples
 void normalize_samples(
 	double data_buffer[][4], 
 	int buffer_size, 
@@ -141,10 +142,10 @@ int main() {
 		cout<<"Collecting samples..."<<endl;
 		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, 0);
 
-		//for(int i=0; i<buffer_size;i++){
-		//	cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
-		//	<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
-		//}
+		for(int i=0; i<buffer_size;i++){
+			cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
+			<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
+		}
 
 		double data_buffer[buffer_size][4];
 
@@ -155,8 +156,8 @@ int main() {
 		//	cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
 		//}
 
-		cout<<"Exporting data..."<<endl;
-		export_csv_data(data_buffer, buffer_size, file_number);
+		//cout<<"Exporting data..."<<endl;
+		//export_csv_data(data_buffer, buffer_size, file_number);
 
 		cout<<"Press s to stop or enter to continue: ";
 		cin >> key;
@@ -217,16 +218,25 @@ void collect_samples(
 	double control_time){
 	int i=0;
 
-	struct timespec req = {0};
-	req.tv_sec = 0;
-	req.tv_nsec = control_time * 1000000L;
+	char buf[6];
 
 	for (i=0;i<size;i++) {
-		sample_buffer[i][0] = read_raw_data(file, ACCEL_XOUT_L);
-		sample_buffer[i][1] = read_raw_data(file, ACCEL_YOUT_L);
-		sample_buffer[i][2] = read_raw_data(file, ACCEL_ZOUT_L);
-		time_buffer[i] = chrono::steady_clock::now();
-		//nanosleep(&req, (struct timespec *)NULL);
+		buf[0] = 0x32;
+		
+		if((write(file, buf, 1)) != 1) {
+			printf("Error writing to i2c slave\n");
+			exit(1);
+		};
+
+		if((read(file, buf, 6)) != 6) {
+			printf("Unable to read from slave\n");
+			exit(1);
+		} else {
+			sample_buffer[i][0] = ((int16_t) buf[1]<<8 | (int16_t) buf[0]);
+			sample_buffer[i][1] = ((int16_t) buf[3]<<8 | (int16_t) buf[2]);
+			sample_buffer[i][2] = ((int16_t) buf[5]<<8 | (int16_t) buf[4]);
+			time_buffer[i] = chrono::steady_clock::now();
+		}
 	}
 }
 
