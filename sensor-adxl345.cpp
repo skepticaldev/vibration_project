@@ -100,19 +100,14 @@ int main() {
 	cout<<"Initializing..."<<endl;
 	mpu_init(file_i2c);
 
-	int buffer_size = 1024;
+	int buffer_size = 131072;
 
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
 	//Calibration
-	//cout<<"Calibrating..."<<endl;
-	//tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, 2000);
-	//cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
-
-	//Calculate time to control frequency
-	//cout<<"Calculating control time..."<<endl;
-	//double c_time = calculate_control_time(file_i2c, 500, 1000, 5);
-	//cout<<"Control time:"<< c_time << endl;
+	cout<<"Calibrating..."<<endl;
+	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, 2000);
+	cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
 
 	char key;
 	cout<<"Press a key to continue or s to stop: ";
@@ -131,10 +126,10 @@ int main() {
 		cout<<"Collecting samples..."<<endl;
 		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, 0);
 
-		for(int i=0; i<buffer_size;i++){
-			cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
-			<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
-		}
+		//for(int i=0; i<buffer_size;i++){
+		//	cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
+		//	<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
+		//}
 
 		double data_buffer[buffer_size][4];
 
@@ -145,8 +140,8 @@ int main() {
 		//	cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
 		//}
 
-		//cout<<"Exporting data..."<<endl;
-		//export_csv_data(data_buffer, buffer_size, file_number);
+		cout<<"Exporting data..."<<endl;
+		export_csv_data(data_buffer, buffer_size, file_number);
 
 		cout<<"Press s to stop or enter to continue: ";
 		cin >> key;
@@ -205,7 +200,7 @@ void collect_samples(
 	chrono::steady_clock::time_point time_buffer[],
 	double control_time){
 	int i=0;
-
+	int j=0;
 	char buf[6];
 
 	for (i=0;i<size;i++) {
@@ -224,7 +219,11 @@ void collect_samples(
 			sample_buffer[i][1] = ((int16_t) buf[3]<<8 | (int16_t) buf[2]);
 			sample_buffer[i][2] = ((int16_t) buf[5]<<8 | (int16_t) buf[4]);
 			time_buffer[i] = chrono::steady_clock::now();
-		}
+		};
+
+		for(j=0;j<1000;j++){
+			
+		};
 	}
 }
 
