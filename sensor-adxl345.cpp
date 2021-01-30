@@ -317,7 +317,7 @@ void normalize_samples(
 
 void export_csv_data(double data_buffer[][4], int buffer_size, int index) {
 
-	string filename =  "sample_csv_set_" + to_string(index) + ".csv";
+	string filename =  "samples_" + to_string(index) + ".csv";
 	ofstream sample_file(filename);
 
 	sample_file<<"time,Ax,Ay,Az"<<endl;
