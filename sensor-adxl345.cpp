@@ -49,10 +49,10 @@ void write_byte_data(int file, __u8 reg, __u8 byte);
 int16_t read_raw_data(int file, __u8 reg);
 
 // Calculate average sample
-tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET, double Y_OFFSET, double Z_OFFSET);
+tuple <double,double,double> avg_data(int buffer_size, double wait_time, int file, double X_OFFSET, double Y_OFFSET, double Z_OFFSET);
 
 // Calibrate function
-tuple <double, double, double> calibrate(int file, int range_error, int buffer_size);
+tuple <double, double, double> calibrate(int file, int range_error, double wait_time, int buffer_size);
 
 // Collect Data
 void collect_samples(
@@ -60,8 +60,8 @@ void collect_samples(
 	int size, 
 	int16_t sample_buffer[][3],
 	chrono::steady_clock::time_point time_buffer[], 
-	//millisenconds
-	double control_time);
+	//seconds
+	double wait_time);
 
 // Export data to csv file
 void export_csv_data(double data_buffer[][4], int buffer_size, int filename);
@@ -103,16 +103,16 @@ int main() {
 	cout<<"Initializing..."<<endl;
 	mpu_init(file_i2c);
 
-	int buffer_size = 131072;
+	int buffer_size = 4096;
 
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
+	double wait_time = calculate_wait_time(file_i2c, 1000, 200, 1);
+	
 	//Calibration
 	cout<<"Calibrating..."<<endl;
-	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, 2000);
+	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, wait_time,400);
 	cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
-
-	double wtime = calculate_wait_time(file_i2c, 1000,2000,1);
 
 	char key;
 	cout<<"Press a key to continue or s to stop: ";
@@ -129,7 +129,7 @@ int main() {
 		chrono::steady_clock::time_point time_buffer[buffer_size];
 
 		cout<<"Collecting samples..."<<endl;
-		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, 0);
+		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, wait_time);
 
 		//for(int i=0; i<buffer_size;i++){
 		//	cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
@@ -139,7 +139,7 @@ int main() {
 		double data_buffer[buffer_size][4];
 
 		cout<<"Normalizing samples..."<<endl;
-		normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 256);
+		normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 128);
 
 		//for(int i=0; i<1024;i++){
 		//	cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
@@ -163,10 +163,10 @@ void mpu_init(int file) {
 	write_byte_data(file, POWER_CLT, 0x08);
 
 	//write to Output data rate
-	write_byte_data(file, BW_RATE, 0x0f);
+	write_byte_data(file, BW_RATE, 0x0c);
 
 	//write to data format
-	write_byte_data(file, DATA_FORMAT, 0x0b);
+	write_byte_data(file, DATA_FORMAT, 0x01);
 }
 
 
@@ -203,12 +203,15 @@ void collect_samples(
 	int size, 
 	int16_t sample_buffer[][3],
 	chrono::steady_clock::time_point time_buffer[],
-	double control_time){
-	int i=0;
-	int j=0;
+	double wait_time) {
+
 	char buf[6];
 
-	for (i=0;i<size;i++) {
+	struct timespec req = {0};
+	req.tv_sec = 0;
+	req.tv_nsec = wait_time * 1000000000L;
+
+	for (int i=0;i<size;i++) {
 		buf[0] = 0x32;
 		
 		if((write(file, buf, 1)) != 1) {
@@ -220,19 +223,17 @@ void collect_samples(
 			printf("Unable to read from slave\n");
 			exit(1);
 		} else {
+			time_buffer[i] = chrono::steady_clock::now();
 			sample_buffer[i][0] = ((int16_t) buf[1]<<8 | (int16_t) buf[0]);
 			sample_buffer[i][1] = ((int16_t) buf[3]<<8 | (int16_t) buf[2]);
 			sample_buffer[i][2] = ((int16_t) buf[5]<<8 | (int16_t) buf[4]);
-			time_buffer[i] = chrono::steady_clock::now();
-		};
 
-		for(j=0;j<1000;j++){
-			
+			nanosleep(&req, (struct timespec *) NULL);
 		};
 	}
 }
 
-tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET=0, double Y_OFFSET=0, double Z_OFFSET=0){
+tuple <double,double,double> avg_data(int buffer_size, int file, double wait_time, double X_OFFSET=0, double Y_OFFSET=0, double Z_OFFSET=0){
 	
 	double avg_ax = 0, avg_ay = 0, avg_az = 0;
 	
@@ -240,32 +241,61 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double X_OFFSET
 	
 	int i = 0;
 
+	struct timespec req = {0};
+	req.tv_sec = 0;
+	req.tv_nsec = wait_time * 1000000000L;
+
+	char buf[6];
+
 	while (i<buffer_size+101) {
 		
 		if(i>100 && i<=(buffer_size+100)) {
-			buff_ax = buff_ax + read_raw_data(file, ACCEL_XOUT_L) + X_OFFSET;
-			buff_ay = buff_ay + read_raw_data(file, ACCEL_YOUT_L) + Y_OFFSET;
-			buff_az = buff_az + read_raw_data(file, ACCEL_ZOUT_L) + Z_OFFSET;
+			buf[0] = 0x32;
+			
+			if((write(file , buf, 1)) != 1) {
+				printf("Error writing to i2c slave\n");
+				exit(1);
+			};
+
+			if((read(file, buf, 6)) != 6) {
+				printf("Unable to read from slave\n");
+				exit(1);
+			} else {
+				int16_t data_x = ((int16_t) buf[1]<<8 | (int16_t) buf[0]);
+				int16_t data_y = ((int16_t) buf[3]<<8 | (int16_t) buf[2]);
+				int16_t data_z = ((int16_t) buf[5]<<8 | (int16_t) buf[4]);
+				
+				// cout<<"X: "<<data_x<<" Y: "<<data_y<<" Z: "<<data_z<<endl;
+
+				buff_ax = buff_ax + X_OFFSET + (double) data_x;
+				buff_ay = buff_ay + Y_OFFSET + (double) data_y;
+				buff_az = buff_az + Z_OFFSET + (double) data_z;
+				
+				//cout<<"buff_ax: "<<buff_ax<<" buff_ay: "<<buff_ay<<" buff_az: "<<buff_az<<endl;
+
+				nanosleep(&req, (struct timespec *) NULL);
+			}
 		}
 
 		if (i==(buffer_size+100)) {
-			avg_ax = buff_ax/buffer_size;
-			avg_ay = buff_ay/buffer_size;
-			avg_az = buff_az/buffer_size;
+			avg_ax = buff_ax/(double) buffer_size;
+			avg_ay = buff_ay/(double) buffer_size;
+			avg_az = buff_az/(double) buffer_size;
 		}
 
 		i+=1;
 	}
+	// cout<<"avg_x: "<<avg_ax<<" avg_y: "<<avg_ay<<" avg_z: "<<avg_az<<endl;
 
 	return make_tuple(avg_ax, avg_ay, avg_az);
 }
 
-tuple <double, double, double> calibrate(int file, int range_error, int buffer_size){
+tuple <double, double, double> calibrate(int file, int range_error, double wait_time, int buffer_size){
 
 	double avg_x, avg_y,avg_z;
 	double x_offset = 0, y_offset = 0, z_offset = 0;
 
-	tie(avg_x, avg_y, avg_z) = avg_data(buffer_size, file, 0, 0, 0);
+	tie(avg_x, avg_y, avg_z) = avg_data(buffer_size, file, wait_time, 0, 0, 0);
 
 	x_offset = -avg_x/range_error;
 	y_offset = -avg_y/range_error;
@@ -274,7 +304,9 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 	while (true) {
 		int ready = 0;
 
-		tie(avg_x, avg_y, avg_z) = avg_data(buffer_size, file, x_offset, y_offset, z_offset);
+		tie(avg_x, avg_y, avg_z) = avg_data(buffer_size, file, wait_time, x_offset, y_offset, z_offset);
+
+		cout<<"X_OFFSET: "<<x_offset<<" Y_OFFSET: "<<y_offset<<" Z_OFFSET: "<<z_offset<<endl;
 
 		if(abs(avg_x)<=range_error){
 			ready+=1;
@@ -368,7 +400,7 @@ double calculate_wait_time(int file, int buffer_size, int target_frequency, int 
 
 		double time_error = target_period_time -  acquisition_period/(double) 1000000000;
 
-		wait_time = wait_time + time_error/((double) frequency_range_error*5);
+		wait_time = wait_time + time_error/((double) frequency_range_error);
 		
 		cout<<"Wait time "<<wait_time<<endl;
 	}
