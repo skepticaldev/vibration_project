@@ -31,7 +31,7 @@
 #define DEVICE_ADDRESS 0x53
 
 //Calibration parameter
-#define RANGE_ERROR 10
+#define RANGE_ERROR 2.5
 
 using namespace std;
 
@@ -65,6 +65,9 @@ void collect_samples(
 
 // Export data to csv file
 void export_csv_data(double data_buffer[][4], int buffer_size, int filename);
+
+// Calculte wait time between samples to achieve desired frequency
+double calculate_wait_time(int file, int buffer_size, int target_frequency, int frequency_range_error);
 
 // Normalize samples
 void normalize_samples(
@@ -108,6 +111,8 @@ int main() {
 	cout<<"Calibrating..."<<endl;
 	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, 2000);
 	cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
+
+	double wtime = calculate_wait_time(file_i2c, 1000,2000,1);
 
 	char key;
 	cout<<"Press a key to continue or s to stop: ";
@@ -292,6 +297,80 @@ tuple <double, double, double> calibrate(int file, int range_error, int buffer_s
 		if(ready==3){
 			return make_tuple(x_offset, y_offset, z_offset);
 		}
+	}
+}
+
+double calculate_wait_time(int file, int buffer_size, int target_frequency, int frequency_range_error) {
+	
+	//wait time in seconds
+	double wait_time = 0.0;
+
+	while(true) {
+
+		//Temp buffer to simulate data sampling
+		int16_t temp_sample_buffer[buffer_size][3];
+		
+		//Temp buffer to simulate time sampling
+		chrono::steady_clock::time_point temp_time_buffer[buffer_size];
+		
+		struct timespec req = {0};
+		req.tv_sec = 0;
+		req.tv_nsec = wait_time * 1000000000L;
+
+		//Start time to calculate elapsed time
+		chrono::steady_clock::time_point start = chrono::steady_clock::now();
+
+		char buf[6];
+
+		for(int i=0;i<buffer_size;i++) {
+			buf[0] = 0x32;
+			
+			if((write(file, buf, 1)) != 1) {
+				printf("Error writing to i2c slave\n");
+				exit(1);
+			};
+
+			if((read(file, buf, 6)) != 6) {
+				printf("Unable to read from slave\n");
+				exit(1);
+			} else {
+				temp_time_buffer[i] = chrono::steady_clock::now();
+				temp_sample_buffer[i][0] = ((int16_t) buf[1]<<8 | (int16_t) buf[0]);
+				temp_sample_buffer[i][1] = ((int16_t) buf[3]<<8 | (int16_t) buf[2]);
+				temp_sample_buffer[i][2] = ((int16_t) buf[5]<<8 | (int16_t) buf[4]);
+
+				nanosleep(&req, (struct timespec *) NULL);
+			}
+		}
+		
+		// Calculate acquisition time
+		double acquisition_time = (double) chrono::duration_cast<chrono::nanoseconds>(temp_time_buffer[buffer_size-1]-start).count();
+		
+		// Calculate acquisition period in nanoseconds
+		double acquisition_period = acquisition_time/(double) buffer_size;
+
+		// Calculate acquisition frequency (convert acquisition period to seconds)
+		double acquisition_frequency = 1*1000000000/(double) acquisition_period;
+
+		cout<<acquisition_frequency<<endl;
+		
+		if((wait_time==0.0) && (acquisition_frequency<target_frequency)) {
+			cout<<"Unable to reach "<<target_frequency<<"Hz acquisition frequency"<<endl;
+			return wait_time;
+		}
+		
+		if(abs(acquisition_frequency-target_frequency)<=frequency_range_error) {
+			return wait_time;
+		}
+		
+		// Calculate target period
+		double target_period_time = 1/(double) target_frequency;
+
+		double time_error = target_period_time -  acquisition_period/(double) 1000000000;
+
+		wait_time = wait_time + time_error/((double) frequency_range_error*5);
+		
+		cout<<"Wait time "<<wait_time<<endl;
 	}
 }
 
