@@ -136,13 +136,20 @@ int main() {
 
 		switch(key) {
 			case 'c': {
-				//Calibrating wait time
-				cout<<"Calculating wait time..."<<endl;
+				//Calibrate wait time
+				cout<<"Calibrating wait time..."<<endl;
 				config["WAIT_TIME"] = calculate_wait_time(file_i2c, 1000, config["FREQUENCY"].asUInt(), 1, config["TRACE"].asBool());
 
-				//Calibrating offsets
+				//Calibrate offsets
 				cout<<"Calibrating... \n";
 				tie(config["X_OFFSET"], config["Y_OFFSET"], config["Z_OFFSET"]) = calibrate(file_i2c, config["CALIBRATION_RANGE_ERROR"].asDouble(), config["WAIT_TIME"].asDouble(), config["CALIBRATION_BUFFER"].asUInt(), config["TRACE"].asBool());
+				save_config(config);
+				break;
+			}
+			case 'w': {
+				//Calibrate wait time
+				cout<<"Calibrating wait time..."<<endl;
+				config["WAIT_TIME"] = calculate_wait_time(file_i2c, 1000, config["FREQUENCY"].asUInt(), 1, config["TRACE"].asBool());
 				save_config(config);
 				break;
 			}
@@ -268,6 +275,7 @@ char choose_option() {
 	cout<<"s - SAMPLE"<<"    ";
 	cout<<"c - CALIBRATE"<<"    ";
 	cout<<"e - EDIT"<<"    ";
+	cout<<"w - CALIBRATE WAIT TIME"<<"    ";
 	cout<<"q - EXIT"<<"    "<<endl;
 	cin>>key;
 	return key;
