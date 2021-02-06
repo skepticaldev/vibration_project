@@ -6,6 +6,8 @@
 #include <tuple>
 #include <fstream>
 #include <string>
+#include <sstream>
+#include <algorithm>
 #include <thread>
 
 #include <unistd.h>
@@ -15,11 +17,11 @@
 
 #include <jsoncpp/json/json.h>
 
-//Power 
+//Power
 #define POWER_CLT 0x2D
 
 //Output data rate
-#define BW_RATE 0x2C 
+#define BW_RATE 0x2C
 
 //Data format
 #define DATA_FORMAT 0x31
@@ -58,10 +60,10 @@ tuple <double, double, double> calibrate(int file, int range_error, double wait_
 
 // Collect Data
 void collect_samples(
-	int file, 
-	int size, 
+	int file,
+	int size,
 	int16_t sample_buffer[][3],
-	chrono::steady_clock::time_point time_buffer[], 
+	chrono::steady_clock::time_point time_buffer[],
 	//seconds
 	double wait_time);
 
@@ -73,17 +75,29 @@ double calculate_wait_time(int file, int buffer_size, int target_frequency, int 
 
 // Normalize samples
 void normalize_samples(
-	double data_buffer[][4], 
-	int buffer_size, 
-	int16_t sample_buffer[][3], 
-	chrono::steady_clock::time_point time_buffer[], 
-	double x_offset, 
-	double y_offset, 
-	double z_offset, 
+	double data_buffer[][4],
+	int buffer_size,
+	int16_t sample_buffer[][3],
+	chrono::steady_clock::time_point time_buffer[],
+	double x_offset,
+	double y_offset,
+	double z_offset,
 	int scale_factor);
+
+// Print current config file
+void show_config(Json::Value config);
 
 // Load Config
 Json::Value load_config(string filename);
+
+// Save Config
+void save_config(Json::Value config);
+
+// Edit config
+Json::Value edit_config(Json::Value config, string key, string value);
+
+// Choose option
+char choose_option();
 
 // Main function
 int main() {
@@ -107,75 +121,114 @@ int main() {
 	// Load config.json file
 	cout<<"Reading config file..."<<endl;
 	Json::Value config = load_config("config.json");
+	show_config(config);
 
 	// MPU configuration
-	cout<<"Initializing..."<<endl;
+	cout<<"Initializing... \n"<<endl;
 	mpu_init(file_i2c);
-
-	int buffer_size = config["BUFFER"].asUInt();
-
-	double x_offset = 0, y_offset = 0, z_offset = 0;
-	
-	cout<<"Calculating wait time..."<<endl;
-	double wait_time = calculate_wait_time(file_i2c, 1000, config["FREQUENCY"].asUInt(), 1, config["TRACE"].asBool());
-
-	//Calibration
-	cout<<"Calibrating..."<<endl;
-	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, config["CALIBRATION_RANGE_ERROR"].asDouble(), wait_time, config["CALIBRATION_BUFFER"].asUInt(), config["TRACE"].asBool());
-
-	config["X_OFFSET"] = x_offset;
-	config["Y_OFFSET"] = y_offset;
-	config["Z_OFFSET"] = z_offset;
-
-	ofstream config_file("config.json");
-	
-	Json::StyledWriter styled;
-	string sStyled = styled.write(config);
-	Json::StyledStreamWriter styledStream;
-	config_file<<sStyled;
-	config_file.close();
-	
-	char key;
-	cout<<"Press a key to continue or s to stop: ";
-	cin >> key;
 
 	int file_number = 1;
 
-	while(key!='s'){
+	while(true){
 
-		// Buffer to collect samples
-		int16_t sample_buffer[buffer_size][3];
+		//Show options
+		char key = choose_option();
 
-		// Buffer to collect aquicsition times
-		chrono::steady_clock::time_point time_buffer[buffer_size];
+		switch(key) {
+			case 'c': {
+				//Calibrating wait time
+				cout<<"Calculating wait time..."<<endl;
+				config["WAIT_TIME"] = calculate_wait_time(file_i2c, 1000, config["FREQUENCY"].asUInt(), 1, config["TRACE"].asBool());
 
-		cout<<"Collecting samples..."<<endl;
-		collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, wait_time);
+				//Calibrating offsets
+				cout<<"Calibrating... \n";
+				tie(config["X_OFFSET"], config["Y_OFFSET"], config["Z_OFFSET"]) = calibrate(file_i2c, config["CALIBRATION_RANGE_ERROR"].asDouble(), config["WAIT_TIME"].asDouble(), config["CALIBRATION_BUFFER"].asUInt(), config["TRACE"].asBool());
+				save_config(config);
+				break;
+			}
+			case 's': {
+				int buffer_size = config["BUFFER"].asUInt();
 
-		//for(int i=0; i<buffer_size;i++){
-		//	cout<<""<< (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-time_buffer[0]).count()/1000
-		//	<<""<<sample_buffer[i][0]<<" "<<sample_buffer[i][1]<<" "<<sample_buffer[i][2]<<endl;
-		//}
+				// Buffer to receive samples
+				int16_t sample_buffer[buffer_size][3];
 
-		double data_buffer[buffer_size][4];
+				// Buffer to receive sample time
+				chrono::steady_clock::time_point time_buffer[buffer_size];
 
-		cout<<"Normalizing samples..."<<endl;
-		normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, x_offset, y_offset, z_offset, 128);
+				// Buffer to receive normalized data
+				double data_buffer[buffer_size][4];
 
-		//for(int i=0; i<1024;i++){
-		//	cout<<data_buffer[i][0]<<" "<<data_buffer[i][1]<<" "<<data_buffer[i][2]<<" "<<data_buffer[i][3]<<endl;
-		//}
+				cout<<"Collecting samples..."<<endl;
+				collect_samples(file_i2c, buffer_size, sample_buffer, time_buffer, config["WAIT_TIME"].asDouble());
 
-		cout<<"Exporting data..."<<endl;
-		export_csv_data(data_buffer, buffer_size, file_number);
+				cout<<"Normalizing samples..."<<endl;
+				normalize_samples(data_buffer, buffer_size, sample_buffer, time_buffer, config["X_OFFSET"].asDouble(), config["Y_OFFSET"].asDouble(), config["Z_OFFSET"].asDouble(), config["SCALE_FACTOR"].asUInt());
 
-		cout<<"Press s to stop or enter to continue: ";
-		cin >> key;
+				cout<<"Exporting data..."<<endl;
+				export_csv_data(data_buffer, buffer_size, file_number);
 
-		file_number+=1;
+				file_number+=1;
+				break;
+			}
+			case 'e': {
+				show_config(config);
+
+				string input = " ";
+				string value = " ";
+
+				cout<<"Config key: ";
+				cin >> input;
+				cout<<"Config value: ";
+				cin >> value;
+
+				config = edit_config(config, input, value);
+				save_config(config);
+
+				break;
+			}
+			case 'q': {
+				exit(0);
+				break;
+			}
+		}
 	}
 
 	return 0;
+}
+
+void show_config(Json::Value config) {
+	Json::Reader reader;
+	cout<<"Configuration:"<<endl;
+	for(Json::Value::const_iterator it=config.begin(); it!=config.end(); ++it)
+		cout<<it.key().asString()<<" - "<<it->asString()<<"\n";
+	cout<<"\n";
+}
+
+Json::Value edit_config(Json::Value config, string key, string value) {
+	Json::Reader reader;
+	
+	for(Json::Value::const_iterator it=config.begin(); it!=config.end(); ++it) {
+		if(it.key().asString()==key) {
+			switch(config[key].type()) {
+				case Json::intValue: config[key] = stoi(value); break;
+				case Json::uintValue: config[key] = stoi(value); break;
+				case Json::realValue: config[key] = stod(value); break;
+				case Json::stringValue: config[key] = value; break;
+				case Json::booleanValue: {
+					std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+					istringstream is(value);
+					bool b;
+					is>>std::boolalpha>>b;
+					config[key] = b;
+					break;
+				}
+			}
+			return config;
+		}
+	}
+
+	cout<<"Unable to find configuration key!"<<endl;
+	return config;
 }
 
 Json::Value load_config(string filename) {
@@ -195,6 +248,31 @@ Json::Value load_config(string filename) {
 	return config;
 }
 
+void save_config(Json::Value config) {
+	
+	//Open config file
+	ofstream config_file("config.json");
+
+	Json::StyledWriter styled;
+	string sStyled = styled.write(config);
+	Json::StyledStreamWriter styledStream;
+	
+	//Write config data
+	config_file<<sStyled;
+	config_file.close();
+}
+
+char choose_option() {
+	char key = 'c';
+	cout<<"Options: "<<endl;
+	cout<<"s - SAMPLE"<<"    ";
+	cout<<"c - CALIBRATE"<<"    ";
+	cout<<"e - EDIT"<<"    ";
+	cout<<"q - EXIT"<<"    "<<endl;
+	cin>>key;
+	return key;
+}
+
 void mpu_init(int file) {
 
 	//power
@@ -211,10 +289,10 @@ void mpu_init(int file) {
 void write_byte_data(int file, __u8 reg, __u8 byte){
 	//payload to deliver to register
 	char payload[2];
-	
+
 	payload[0] = reg;
 	payload[1] = byte;
-	
+
 	if(write(file, payload, 2) != 2) {
 		printf("Error to write register");
 	}
@@ -223,9 +301,9 @@ void write_byte_data(int file, __u8 reg, __u8 byte){
 int16_t read_raw_data(int file, __u8 reg){
 	// buffer to receive high and low values
 	int8_t buffer[2];
-	
+
 	char payload[1];
-	
+
 	payload[0] = reg;
 
 	write(file, payload, 1);
@@ -237,8 +315,8 @@ int16_t read_raw_data(int file, __u8 reg){
 }
 
 void collect_samples(
-	int file, 
-	int size, 
+	int file,
+	int size,
 	int16_t sample_buffer[][3],
 	chrono::steady_clock::time_point time_buffer[],
 	double wait_time) {
@@ -251,7 +329,7 @@ void collect_samples(
 
 	for (int i=0;i<size;i++) {
 		buf[0] = 0x32;
-		
+
 		if((write(file, buf, 1)) != 1) {
 			printf("Error writing to i2c slave\n");
 			exit(1);
@@ -272,11 +350,11 @@ void collect_samples(
 }
 
 tuple <double,double,double> avg_data(int buffer_size, int file, double wait_time, double X_OFFSET=0, double Y_OFFSET=0, double Z_OFFSET=0){
-	
+
 	double avg_ax = 0, avg_ay = 0, avg_az = 0;
-	
+
 	double buff_ax = 0, buff_ay = 0, buff_az = 0;
-	
+
 	int i = 0;
 
 	struct timespec req = {0};
@@ -286,10 +364,10 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double wait_tim
 	char buf[6];
 
 	while (i<buffer_size+101) {
-		
+
 		if(i>100 && i<=(buffer_size+100)) {
 			buf[0] = 0x32;
-			
+
 			if((write(file , buf, 1)) != 1) {
 				printf("Error writing to i2c slave\n");
 				exit(1);
@@ -302,13 +380,13 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double wait_tim
 				int16_t data_x = ((int16_t) buf[1]<<8 | (int16_t) buf[0]);
 				int16_t data_y = ((int16_t) buf[3]<<8 | (int16_t) buf[2]);
 				int16_t data_z = ((int16_t) buf[5]<<8 | (int16_t) buf[4]);
-				
+
 				// cout<<"X: "<<data_x<<" Y: "<<data_y<<" Z: "<<data_z<<endl;
 
 				buff_ax = buff_ax + X_OFFSET + (double) data_x;
 				buff_ay = buff_ay + Y_OFFSET + (double) data_y;
 				buff_az = buff_az + Z_OFFSET + (double) data_z;
-				
+
 				//cout<<"buff_ax: "<<buff_ax<<" buff_ay: "<<buff_ay<<" buff_az: "<<buff_az<<endl;
 
 				nanosleep(&req, (struct timespec *) NULL);
@@ -353,7 +431,7 @@ tuple <double, double, double> calibrate(int file, int range_error, double wait_
 		} else {
 			x_offset = x_offset - avg_x/range_error;
 		}
-		
+
 		if(abs(avg_y)<=range_error){
 			ready+=1;
 		} else {
@@ -374,7 +452,7 @@ tuple <double, double, double> calibrate(int file, int range_error, double wait_
 }
 
 double calculate_wait_time(int file, int buffer_size, int target_frequency, int frequency_range_error, bool trace) {
-	
+
 	//wait time in seconds
 	double wait_time = 0.0;
 
@@ -382,10 +460,10 @@ double calculate_wait_time(int file, int buffer_size, int target_frequency, int 
 
 		//Temp buffer to simulate data sampling
 		int16_t temp_sample_buffer[buffer_size][3];
-		
+
 		//Temp buffer to simulate time sampling
 		chrono::steady_clock::time_point temp_time_buffer[buffer_size];
-		
+
 		struct timespec req = {0};
 		req.tv_sec = 0;
 		req.tv_nsec = wait_time * 1000000000L;
@@ -397,7 +475,7 @@ double calculate_wait_time(int file, int buffer_size, int target_frequency, int 
 
 		for(int i=0;i<buffer_size;i++) {
 			buf[0] = 0x32;
-			
+
 			if((write(file, buf, 1)) != 1) {
 				printf("Error writing to i2c slave\n");
 				exit(1);
@@ -415,10 +493,10 @@ double calculate_wait_time(int file, int buffer_size, int target_frequency, int 
 				nanosleep(&req, (struct timespec *) NULL);
 			}
 		}
-		
+
 		// Calculate acquisition time
 		double acquisition_time = (double) chrono::duration_cast<chrono::nanoseconds>(temp_time_buffer[buffer_size-1]-start).count();
-		
+
 		// Calculate acquisition period in nanoseconds
 		double acquisition_period = acquisition_time/(double) buffer_size;
 
@@ -430,15 +508,15 @@ double calculate_wait_time(int file, int buffer_size, int target_frequency, int 
 		}
 
 		if((wait_time==0.0) && (acquisition_frequency<target_frequency)) {
-			cout<<"Unable to reach "<<target_frequency<<"Hz acquisition frequency"<<endl;
+			cout<<"Unable to reach "<<target_frequency<<"Hz acquisition frequency\n"<<endl;
 			return wait_time;
 		}
-		
+
 		if(abs(acquisition_frequency-target_frequency)<=frequency_range_error) {
-			cout<<"Acquisition frequency: "<<acquisition_frequency<<" HZ"<<endl;
+			cout<<"Acquisition frequency: "<<acquisition_frequency<<" HZ\n"<<endl;
 			return wait_time;
 		}
-		
+
 		// Calculate target period
 		double target_period_time = 1/(double) target_frequency;
 
@@ -449,19 +527,19 @@ double calculate_wait_time(int file, int buffer_size, int target_frequency, int 
 }
 
 void normalize_samples(
-	double data_buffer[][4], 
-	int buffer_size, 
-	int16_t sample_buffer[][3], 
-	chrono::steady_clock::time_point time_buffer[], 
-	double x_offset, 
-	double y_offset, 
-	double z_offset, 
+	double data_buffer[][4],
+	int buffer_size,
+	int16_t sample_buffer[][3],
+	chrono::steady_clock::time_point time_buffer[],
+	double x_offset,
+	double y_offset,
+	double z_offset,
 	int scale_factor) {
 
 	chrono::steady_clock::time_point start = time_buffer[0];
 
 	for(int i =0;i<buffer_size;i++)	{
-		data_buffer[i][0] = (double)chrono::duration_cast<chrono::microseconds>(time_buffer[i]-start).count()/1000;
+		data_buffer[i][0] = (double)chrono::duration_cast<chrono::nanoseconds>(time_buffer[i]-start).count()/1000000000;
 		data_buffer[i][1] = (sample_buffer[i][0]+x_offset)/(double)scale_factor;
 		data_buffer[i][2] = (sample_buffer[i][1]+y_offset)/(double)scale_factor;
 		data_buffer[i][3] = (sample_buffer[i][2]+z_offset)/(double)scale_factor;
