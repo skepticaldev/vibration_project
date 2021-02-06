@@ -13,6 +13,8 @@
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 
+#include <jsoncpp/json/json.h>
+
 //Power 
 #define POWER_CLT 0x2D
 
@@ -52,7 +54,7 @@ int16_t read_raw_data(int file, __u8 reg);
 tuple <double,double,double> avg_data(int buffer_size, double wait_time, int file, double X_OFFSET, double Y_OFFSET, double Z_OFFSET);
 
 // Calibrate function
-tuple <double, double, double> calibrate(int file, int range_error, double wait_time, int buffer_size);
+tuple <double, double, double> calibrate(int file, int range_error, double wait_time, int buffer_size, bool trace);
 
 // Collect Data
 void collect_samples(
@@ -67,7 +69,7 @@ void collect_samples(
 void export_csv_data(double data_buffer[][4], int buffer_size, int filename);
 
 // Calculte wait time between samples to achieve desired frequency
-double calculate_wait_time(int file, int buffer_size, int target_frequency, int frequency_range_error);
+double calculate_wait_time(int file, int buffer_size, int target_frequency, int frequency_range_error, bool trace);
 
 // Normalize samples
 void normalize_samples(
@@ -79,6 +81,9 @@ void normalize_samples(
 	double y_offset, 
 	double z_offset, 
 	int scale_factor);
+
+// Load Config
+Json::Value load_config(string filename);
 
 // Main function
 int main() {
@@ -99,21 +104,37 @@ int main() {
 		return 2;
 	}
 
+	// Load config.json file
+	cout<<"Reading config file..."<<endl;
+	Json::Value config = load_config("config.json");
+
 	// MPU configuration
 	cout<<"Initializing..."<<endl;
 	mpu_init(file_i2c);
 
-	int buffer_size = 4096;
+	int buffer_size = config["BUFFER"].asUInt();
 
 	double x_offset = 0, y_offset = 0, z_offset = 0;
-
-	double wait_time = calculate_wait_time(file_i2c, 1000, 200, 1);
 	
+	cout<<"Calculating wait time..."<<endl;
+	double wait_time = calculate_wait_time(file_i2c, 1000, config["FREQUENCY"].asUInt(), 1, config["TRACE"].asBool());
+
 	//Calibration
 	cout<<"Calibrating..."<<endl;
-	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, RANGE_ERROR, wait_time,400);
-	cout<<"Offsets xyz: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
+	tie(x_offset, y_offset, z_offset) = calibrate(file_i2c, config["CALIBRATION_RANGE_ERROR"].asDouble(), wait_time, config["CALIBRATION_BUFFER"].asUInt(), config["TRACE"].asBool());
 
+	config["X_OFFSET"] = x_offset;
+	config["Y_OFFSET"] = y_offset;
+	config["Z_OFFSET"] = z_offset;
+
+	ofstream config_file("config.json");
+	
+	Json::StyledWriter styled;
+	string sStyled = styled.write(config);
+	Json::StyledStreamWriter styledStream;
+	config_file<<sStyled;
+	config_file.close();
+	
 	char key;
 	cout<<"Press a key to continue or s to stop: ";
 	cin >> key;
@@ -155,6 +176,23 @@ int main() {
 	}
 
 	return 0;
+}
+
+Json::Value load_config(string filename) {
+
+	ifstream config_file(filename);
+	Json::Reader reader;
+	Json::Value config;
+
+	bool b = reader.parse(config_file, config);
+	
+	if(!b) {
+		cout<<"Error reading configuration file!"<<endl;
+		cout<<reader.getFormattedErrorMessages()<<endl;
+		exit(1);
+	}
+
+	return config;
 }
 
 void mpu_init(int file) {
@@ -290,7 +328,7 @@ tuple <double,double,double> avg_data(int buffer_size, int file, double wait_tim
 	return make_tuple(avg_ax, avg_ay, avg_az);
 }
 
-tuple <double, double, double> calibrate(int file, int range_error, double wait_time, int buffer_size){
+tuple <double, double, double> calibrate(int file, int range_error, double wait_time, int buffer_size, bool trace){
 
 	double avg_x, avg_y,avg_z;
 	double x_offset = 0, y_offset = 0, z_offset = 0;
@@ -306,7 +344,9 @@ tuple <double, double, double> calibrate(int file, int range_error, double wait_
 
 		tie(avg_x, avg_y, avg_z) = avg_data(buffer_size, file, wait_time, x_offset, y_offset, z_offset);
 
-		cout<<"X_OFFSET: "<<x_offset<<" Y_OFFSET: "<<y_offset<<" Z_OFFSET: "<<z_offset<<endl;
+		if(trace) {
+			cout<<"X_OFFSET: "<<x_offset<<" Y_OFFSET: "<<y_offset<<" Z_OFFSET: "<<z_offset<<endl;
+		}
 
 		if(abs(avg_x)<=range_error){
 			ready+=1;
@@ -327,12 +367,13 @@ tuple <double, double, double> calibrate(int file, int range_error, double wait_
 		}
 
 		if(ready==3){
+			cout<<"Offsets XYZ: " << x_offset<<" "<<y_offset<<" "<<z_offset<<endl;
 			return make_tuple(x_offset, y_offset, z_offset);
 		}
 	}
 }
 
-double calculate_wait_time(int file, int buffer_size, int target_frequency, int frequency_range_error) {
+double calculate_wait_time(int file, int buffer_size, int target_frequency, int frequency_range_error, bool trace) {
 	
 	//wait time in seconds
 	double wait_time = 0.0;
@@ -384,14 +425,17 @@ double calculate_wait_time(int file, int buffer_size, int target_frequency, int 
 		// Calculate acquisition frequency (convert acquisition period to seconds)
 		double acquisition_frequency = 1*1000000000/(double) acquisition_period;
 
-		cout<<acquisition_frequency<<endl;
-		
+		if(trace) {
+			cout<<"Frequency: "<<acquisition_frequency<<" HZ"<<" Wait time: "<<wait_time<<" s"<<endl;
+		}
+
 		if((wait_time==0.0) && (acquisition_frequency<target_frequency)) {
 			cout<<"Unable to reach "<<target_frequency<<"Hz acquisition frequency"<<endl;
 			return wait_time;
 		}
 		
 		if(abs(acquisition_frequency-target_frequency)<=frequency_range_error) {
+			cout<<"Acquisition frequency: "<<acquisition_frequency<<" HZ"<<endl;
 			return wait_time;
 		}
 		
@@ -401,8 +445,6 @@ double calculate_wait_time(int file, int buffer_size, int target_frequency, int 
 		double time_error = target_period_time -  acquisition_period/(double) 1000000000;
 
 		wait_time = wait_time + time_error/((double) frequency_range_error);
-		
-		cout<<"Wait time "<<wait_time<<endl;
 	}
 }
 
