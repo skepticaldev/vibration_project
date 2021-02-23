@@ -22,7 +22,8 @@
 
 const int maxFreq = 3200;
 const int spiSpeed = 2000000;
-const int maxSPIfreq = 100000;
+const int maxSPIfreq = 60000;
+const int checkFreqSamples = 100;
 
 int readBytes(int handle, char *data, int count) {
 	data[0] |= READ_BIT;
@@ -80,9 +81,9 @@ int main(int argc, char *argv[]) {
 	ry = malloc(samplesMaxSPI * sizeof(double));
 	rz = malloc(samplesMaxSPI * sizeof(double));
 
-	tStart = time_time();
-
 	int i;
+
+	tStart = time_time();
 
 	for(i=0; i<samplesMaxSPI; i++) {
 		data[0] = DATAX0;
@@ -99,8 +100,38 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	gpioTerminate();
-	printf("%.4f time \n", t-tStart);
-	printf("%d samples \n", i);
+
+	double tCurrent, tClosest, tError;
+	int j, jClosest;
+
+	for(i=0; i < samples; i++) {
+		if(i == 0) {
+			tCurrent = 0.0;
+			jClosest = 0;
+			tClosest = rt[jClosest];
+		} else {
+			tCurrent = (float)i * dt;
+			tError = fabs(tClosest-tCurrent);
+			for(j = jClosest; j < samplesMaxSPI; j++) {
+				if(fabs(rt[j] - tCurrent) <= tError) {
+					jClosest = j;
+					tClosest = rt[jClosest];
+					tError = fabs(tClosest - tCurrent);
+				} else {
+					break;
+				}
+			}
+
+		}
+		ax[i] = (double)rx[jClosest];
+		ay[i] = (double)ry[jClosest];
+		az[i] = (double)rz[jClosest];
+		at[i] = tCurrent;
+	}
+
+	for(i=0;i<100;i++){
+		printf("%.8f time , %.3f \n", at[i], az[i]);
+	}
 	return 0;
 }
 
